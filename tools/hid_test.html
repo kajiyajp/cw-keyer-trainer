@@ -1,0 +1,41 @@
+<!doctype html>
+<!-- 作成：2026-11-21 / 目的：キーヤーの HID キー（keydown / keyup）が届くかを PC・iPhone で確かめる -->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HID キー確認</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 16px; background: #fff; color: #111; }
+  #lamp { width: 80px; height: 80px; border-radius: 50%; background: #ccc; margin: 12px 0; }
+  #lamp.on { background: #e33; }
+  pre { background: #f3f3f3; padding: 8px; height: 50vh; overflow: auto; font-size: 13px; }
+  @media (prefers-color-scheme: dark) { body { background: #111; color: #eee; } pre { background: #222; } }
+</style>
+</head>
+<body>
+<h1>HID キー確認</h1>
+<p>パドルを打つと、ランプが点き、下に key / code / 押していた時間 が出ます。何も出ないときは画面を一度タップしてください。</p>
+<div id="lamp"></div>
+<pre id="log"></pre>
+<script>
+// keydown / keyup の時刻を記録して表示する
+const log = document.getElementById('log');
+const lamp = document.getElementById('lamp');
+let downAt = 0;
+function add(s) { log.textContent = s + '\n' + log.textContent; }
+document.addEventListener('keydown', e => {
+  e.preventDefault();
+  if (e.repeat) { add(`repeat  key=${e.key} code=${e.code}`); return; }
+  downAt = performance.now();
+  lamp.classList.add('on');
+  add(`down    key=${e.key} code=${e.code}`);
+});
+document.addEventListener('keyup', e => {
+  e.preventDefault();
+  lamp.classList.remove('on');
+  add(`up      key=${e.key} code=${e.code}  ${Math.round(performance.now() - downAt)} ms`);
+});
+</script>
+</body>
+</html>

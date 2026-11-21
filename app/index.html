@@ -1,0 +1,39 @@
+<!doctype html>
+<!-- 作成：2026-11-21 / 目的：CW 練習アプリ（PWA）の画面の骨組み -->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CW Trainer 練習</title>
+<link rel="stylesheet" href="style.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="theme-color" content="#111214">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="CW Trainer">
+</head>
+<body>
+<header>
+  <h1>CW Trainer 練習</h1>
+  <nav id="tabs">
+    <button type="button" data-tab="receive" class="on">受信</button>
+    <button type="button" data-tab="written">筆記</button>
+    <button type="button" data-tab="echo">エコー</button>
+    <button type="button" data-tab="send">送信</button>
+    <button type="button" data-tab="settings">設定</button>
+  </nav>
+</header>
+<main>
+  <section id="receive"></section>
+  <section id="written" hidden></section>
+  <section id="echo" hidden></section>
+  <section id="send" hidden></section>
+  <section id="settings" hidden></section>
+</main>
+<div id="start">
+  <p>音を出すため、最初に一度タップしてください</p>
+  <button type="button" id="startBtn" class="primary">はじめる</button>
+</div>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
