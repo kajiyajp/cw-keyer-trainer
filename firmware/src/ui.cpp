@@ -1,11 +1,13 @@
 // 作成：2026-11-21
-// 目的：オフライン画面の実装。MENU 短押し＝次／値変更、OK＝決定、MENU 長押し＝メニューへ戻る
+// 目的：オフライン画面の実装。つまみ1つで操作：回す＝選ぶ／値を変える、押す＝決定、長押し＝メニューへ戻る
+//       つまみの LED：エコー練習の正解＝青・不正解＝赤を短く点灯、設定画面の間＝赤
 #include "ui.h"
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <Wire.h>
 #include <string.h>
 #include "debounce.h"
+#include "encoder.h"
 #include "engine.h"
 #include "morse.h"
 #include "pins.h"
@@ -21,6 +23,7 @@ constexpr uint16_t REDRAW_MS = 100;       // 描画の最短間隔（描画中�
 constexpr uint16_t RESULT_WAIT_MS = 1200;
 constexpr uint16_t OK_BEEP_HZ = 1600;  // トーン上限（1200Hz）より高くして打鍵音と区別する
 constexpr uint16_t OK_BEEP_MS = 50;
+constexpr uint16_t LED_FLASH_MS = 300;  // 正解・不正解の LED を点ける長さ
 
 Adafruit_SSD1306 oled(128, 64, &Wire, -1);
 bool oledOk = false;
@@ -31,8 +34,9 @@ Screen screen = Screen::Menu;
 uint8_t menuIndex = 0;
 const char* const MENU_ITEMS[] = {"Echo", "Free", "Settings"};
 uint8_t settingIndex = 0;
+// ConfigItem の並びと同じ順
 const char* const SETTING_NAMES[] = {"WPM", "MODE", "TONE", "SIDETONE", "KOCH", "ECHO LEN", "HINT"};
-constexpr uint8_t SETTING_COUNT = 7;
+constexpr uint8_t SETTING_COUNT = (uint8_t)ConfigItem::Count;
 
 EchoTrainer trainer(1);
 PromptKind kind = PromptKind::Koch;
@@ -43,9 +47,13 @@ char typed[12] = {0};
 
 char freeText[64] = {0};  // 自由打鍵の表示（末尾に追加し、あふれたら前を捨てる）
 
-Debouncer menuIn(20), okIn(20);
-bool menuPrev = false, okPrev = false, longFired = false;
-uint32_t menuDownAt = 0;
+Debouncer swIn(20);
+bool swPrev = false, longFired = false;
+uint32_t swDownAt = 0;
+QuadratureDecoder knob;
+volatile int16_t knobSteps = 0;  // 割り込みで数えたクリック数（右回り＝＋）
+uint32_t flashUntil = 0;         // 正解・不正解の LED を消す時刻
+uint8_t flashPin = 0;            // 点けている LED（0＝なし）
 bool dirty = true;
 uint32_t lastDraw = 0;
 uint32_t lastActivity = 0;  // 最後の打鍵イベントの時刻
@@ -63,20 +71,9 @@ void newPrompt() {
   dirty = true;
 }
 
-// 設定項目の値を1段階進める（上限で折り返す）
-void bumpSetting() {
-  switch (settingIndex) {
-    case 0: cfg->wpm = cfg->wpm >= WPM_MAX ? WPM_MIN : cfg->wpm + 1; break;
-    case 1:  // A → B → U → A
-      cfg->mode = cfg->mode == KeyerMode::A ? KeyerMode::B
-                : cfg->mode == KeyerMode::B ? KeyerMode::Ultimatic : KeyerMode::A;
-      break;
-    case 2: cfg->toneHz = cfg->toneHz + 50 > TONE_MAX ? TONE_MIN : cfg->toneHz + 50; break;
-    case 3: cfg->sidetone = !cfg->sidetone; break;
-    case 4: cfg->kochLevel = cfg->kochLevel >= KOCH_MAX ? KOCH_MIN : cfg->kochLevel + 1; break;
-    case 5: cfg->echoLen = cfg->echoLen >= ECHOLEN_MAX ? ECHOLEN_MIN : cfg->echoLen + 1; break;
-    case 6: cfg->hint = !cfg->hint; break;
-  }
+// 選んでいる設定項目の値を dir の向きに1段階動かす（端で折り返す）
+void stepSetting(int8_t dir) {
+  configStep(*cfg, (ConfigItem)settingIndex, dir);
   configChanged();
 }
 
@@ -93,23 +90,25 @@ void settingValue(uint8_t i, char* out, size_t n) {
   }
 }
 
-// MENU 短押し
-void onMenu() {
+// つまみを回した（dir＝+1 右回り／-1 左回り）
+void onTurn(int8_t dir) {
   switch (screen) {
-    case Screen::Menu: menuIndex = (menuIndex + 1) % 3; break;
-    case Screen::Echo:
-      kind = kind == PromptKind::Koch ? PromptKind::Callsign
-           : kind == PromptKind::Callsign ? PromptKind::Abbrev : PromptKind::Koch;
+    case Screen::Menu: menuIndex = (menuIndex + 3 + dir) % 3; break;
+    case Screen::Echo:  // 出題の種類を切り替える
+      if (dir > 0) kind = kind == PromptKind::Koch ? PromptKind::Callsign
+                        : kind == PromptKind::Callsign ? PromptKind::Abbrev : PromptKind::Koch;
+      else kind = kind == PromptKind::Koch ? PromptKind::Abbrev
+                : kind == PromptKind::Abbrev ? PromptKind::Callsign : PromptKind::Koch;
       newPrompt();
       break;
     case Screen::Free: break;
-    case Screen::Settings: bumpSetting(); break;
+    case Screen::Settings: stepSetting(dir); break;
   }
   dirty = true;
 }
 
-// OK 押し
-void onOk() {
+// つまみを押した（短押し）
+void onPush() {
   switch (screen) {
     case Screen::Menu:
       if (menuIndex == 0) { screen = Screen::Echo; scoreOk = scoreAll = 0; newPrompt(); }
@@ -133,23 +132,57 @@ void onOk() {
   dirty = true;
 }
 
-// ボタンを読み、短押し・長押しを判定する
-void readButtons(uint32_t now) {
-  bool menu = menuIn.update(now, digitalRead(PIN_BTN_MENU) == LOW);
-  bool ok = okIn.update(now, digitalRead(PIN_BTN_OK) == LOW);
-  if (menu && !menuPrev) { menuDownAt = now; longFired = false; }
-  if (menu && !longFired && now - menuDownAt >= LONG_PRESS_MS) {
+// つまみの A/B が変わるたびに呼ばれる（割り込み）
+void onKnobEdge() {
+  knobSteps += knob.update(digitalRead(PIN_KNOB_A) == LOW, digitalRead(PIN_KNOB_B) == LOW);
+}
+
+// 割り込みで数えたクリック数を取り出す
+int16_t takeKnobSteps() {
+  noInterrupts();
+  int16_t n = knobSteps;
+  knobSteps = 0;
+  interrupts();
+  return n;
+}
+
+// つまみを読み、回転・短押し・長押しを判定する
+void readKnob(uint32_t now) {
+  bool sw = swIn.update(now, digitalRead(PIN_KNOB_SW) == LOW);
+  int16_t steps = takeKnobSteps();
+  if (sw && !swPrev) { swDownAt = now; longFired = false; }
+  if (sw && !longFired && now - swDownAt >= LONG_PRESS_MS) {
     longFired = true;
     if (screen == Screen::Settings) settingsRequestSave(*cfg);  // 変更済みの値を残さず保存する
     screen = Screen::Menu;
     dirty = true;
   }
-  // エコー練習で再生中のボタンは無視（再生が重なるのを防ぐ）
+  // エコー練習で再生中の操作は無視（再生が重なるのを防ぐ）
   bool blocked = screen == Screen::Echo && enginePlayerBusy();
-  if (!menu && menuPrev && !longFired && !blocked) onMenu();
-  if (ok && !okPrev && !blocked) onOk();
-  menuPrev = menu;
-  okPrev = ok;
+  // 短押しは離したときに判定する（長押しと区別するため）
+  if (!sw && swPrev && !longFired && !blocked) onPush();
+  swPrev = sw;
+  if (steps == 0 || blocked) return;
+  int8_t dir = steps > 0 ? 1 : -1;
+  if (screen == Screen::Echo) { onTurn(dir); return; }  // 種類の切り替えは1回だけ（毎回出題し直すため）
+  for (int16_t i = steps > 0 ? steps : -steps; i > 0; --i) onTurn(dir);
+}
+
+// LED を短く点ける（正解＝青、不正解＝赤）
+void flashLed(uint8_t pin, uint32_t now) {
+  if (flashPin && flashPin != pin) digitalWrite(flashPin, LOW);
+  flashPin = pin;
+  flashUntil = now + LED_FLASH_MS;
+  digitalWrite(pin, HIGH);
+}
+
+// LED を画面と時刻に合わせる（青は打鍵の表示で core1 も使う）
+void updateLeds(uint32_t now) {
+  if (flashPin && (int32_t)(now - flashUntil) >= 0) {
+    digitalWrite(flashPin, LOW);
+    flashPin = 0;
+  }
+  if (flashPin != PIN_KNOB_RED) digitalWrite(PIN_KNOB_RED, screen == Screen::Settings ? HIGH : LOW);
 }
 
 // エコー練習の進行
@@ -201,12 +234,12 @@ void draw() {
       }
       break;
     case Screen::Free:
-      oled.println("Free  (OK:clear)");
+      oled.println("Free  (push:clear)");
       oled.setTextSize(1);
       oled.print(freeText);
       break;
     case Screen::Settings:
-      oled.println("Settings (OK:next)");
+      oled.println("Settings (push:next)");
       for (uint8_t i = 0; i < SETTING_COUNT; ++i) {
         settingValue(i, v, sizeof v);
         oled.printf("%c %-8s %s\n", i == settingIndex ? '>' : ' ', SETTING_NAMES[i], v);
@@ -221,8 +254,15 @@ void uiBegin(Config* c, void (*onConfigChanged)()) {
   cfg = c;
   configChanged = onConfigChanged;
   trainer = EchoTrainer(micros() | 1);
-  pinMode(PIN_BTN_MENU, INPUT_PULLUP);
-  pinMode(PIN_BTN_OK, INPUT_PULLUP);
+  pinMode(PIN_KNOB_SW, INPUT_PULLUP);
+  pinMode(PIN_KNOB_A, INPUT_PULLUP);
+  pinMode(PIN_KNOB_B, INPUT_PULLUP);
+  pinMode(PIN_KNOB_RED, OUTPUT);
+  pinMode(PIN_KNOB_BLUE, OUTPUT);
+  digitalWrite(PIN_KNOB_RED, LOW);
+  digitalWrite(PIN_KNOB_BLUE, LOW);
+  attachInterrupt(digitalPinToInterrupt(PIN_KNOB_A), onKnobEdge, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(PIN_KNOB_B), onKnobEdge, CHANGE);
   Wire.setSDA(PIN_SDA);
   Wire.setSCL(PIN_SCL);
   Wire.begin();
@@ -246,10 +286,16 @@ void uiOnChar(char c) {
     if (len < sizeof(typed) - 1) { typed[len] = c; typed[len + 1] = '\0'; }
     if (trainer.answerComplete()) {
       ++scoreAll;
-      if (trainer.isCorrect()) { ++scoreOk; engineBeep(OK_BEEP_HZ, OK_BEEP_MS); }
-      else enginePlay(trainer.prompt(), cfg->wpm);  // 不正解：正解を聞かせる
-      echoState = EchoState::Result;
       resultAt = millis();
+      if (trainer.isCorrect()) {
+        ++scoreOk;
+        engineBeep(OK_BEEP_HZ, OK_BEEP_MS);
+        flashLed(PIN_KNOB_BLUE, resultAt);
+      } else {
+        enginePlay(trainer.prompt(), cfg->wpm);  // 不正解：正解を聞かせる
+        flashLed(PIN_KNOB_RED, resultAt);
+      }
+      echoState = EchoState::Result;
     }
     dirty = true;
   }
@@ -258,8 +304,9 @@ void uiOnChar(char c) {
 void uiNoteActivity(uint32_t nowMs) { lastActivity = nowMs; }
 
 void uiUpdate(uint32_t now) {
-  readButtons(now);
+  readKnob(now);
   if (screen == Screen::Echo) updateEcho(now);
+  updateLeds(now);
   // 打鍵中（最後のイベントから語間＝短点7個分以内）は描画しない。描画中は HID が約 25ms 止まるため
   bool quiet = now - lastActivity >= 7u * (1200u / cfg->wpm);
   if (oledOk && dirty && quiet && now - lastDraw >= REDRAW_MS) {
