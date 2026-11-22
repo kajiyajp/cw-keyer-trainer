@@ -5,3 +5,8 @@ node_modules/
 _site/
 # CADPAC-CREATOR で保存したファイル（各自の作業用。リポジトリには STEP を置く）
 *.ckd
+# KiCad が開いたときに作る自分用のファイル（画面の状態・自動バックアップ・ロック）
+*.kicad_prl
+*-backups/
+~*.lck
+\#auto_saved_files\#

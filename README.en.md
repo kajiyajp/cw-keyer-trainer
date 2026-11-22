@@ -49,6 +49,8 @@ Then open http://localhost:8000/ in Chrome / Edge (use `-Port 8001` for another 
 
 Layout on a breadboard-pattern perfboard (Akizuki 104303, 80 × 50 mm): [component side](docs/board_front.png) / [solder side](docs/board_back.png) (labels in Japanese)
 
+**Schematic (KiCad 10), bill of materials and assembly steps**: [docs/hardware.md](docs/hardware.md) (Japanese). The KiCad project is in [hardware/](hardware/).
+
 | Pin | Use |
 |---|---|
 | D0 / D1 | Dit / dah (internal pull-up, closes to GND) |
