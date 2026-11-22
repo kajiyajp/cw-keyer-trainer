@@ -79,6 +79,38 @@ void test_dit_memory() {
   TEST_ASSERT_TRUE(tone[240]);   // 長点 0-179、間 180-239、短点 240-299
 }
 
+// Ultimatic：同時に両押し → 短点を優先して短点だけが続く（交互にしない）
+void test_ultimatic_simultaneous_press_repeats_dit() {
+  reset(); IambicKeyer k; k.setWpm(20); k.setMode(KeyerMode::Ultimatic);
+  run(k, 0, 600, {0, 2000}, {0, 2000});
+  TEST_ASSERT_EQUAL_STRING(".....", sent);
+}
+
+// Ultimatic：短点を押したまま長点を足す → 後から押した長点が続く（iambic なら交互）
+void test_ultimatic_last_pressed_wins() {
+  reset(); IambicKeyer u; u.setWpm(20); u.setMode(KeyerMode::Ultimatic);
+  run(u, 0, 800, {0, 2000}, {100, 2000});
+  TEST_ASSERT_EQUAL_STRING(".---", sent);  // . 0-59、- 120-299、- 360-539、- 600-779
+
+  reset(); IambicKeyer b; b.setWpm(20); b.setMode(KeyerMode::B);
+  run(b, 0, 800, {0, 2000}, {100, 2000});
+  TEST_ASSERT_EQUAL_STRING(".-.-.", sent);  // 同じ入力でも B は交互になる
+}
+
+// Ultimatic：長点を離すと、押したままの短点に戻る
+void test_ultimatic_release_returns_to_held() {
+  reset(); IambicKeyer k; k.setWpm(20); k.setMode(KeyerMode::Ultimatic);
+  run(k, 0, 800, {0, 2000}, {100, 400});
+  TEST_ASSERT_EQUAL_STRING(".--..", sent);  // 長点 360-539 の後は短点 600-659、720-779
+}
+
+// Ultimatic：短点を押し続けて長点を一瞬だけ押す → メモリで長点を1つ送り、短点に戻る
+void test_ultimatic_memory() {
+  reset(); IambicKeyer k; k.setWpm(20); k.setMode(KeyerMode::Ultimatic);
+  run(k, 0, 600, {0, 2000}, {20, 40});
+  TEST_ASSERT_EQUAL_STRING(".-..", sent);  // . 0-59、- 120-299、. 360-419、. 480-539
+}
+
 // 長点中に速度変更 → 今の長点は 180ms のまま、次の短点は 120ms（10WPM）
 void test_wpm_change_next_element() {
   reset(); IambicKeyer k; k.setWpm(20);
@@ -132,6 +164,10 @@ int main() {
   RUN_TEST(test_squeeze_alternates);
   RUN_TEST(test_mode_b_extra_element);
   RUN_TEST(test_dit_memory);
+  RUN_TEST(test_ultimatic_simultaneous_press_repeats_dit);
+  RUN_TEST(test_ultimatic_last_pressed_wins);
+  RUN_TEST(test_ultimatic_release_returns_to_held);
+  RUN_TEST(test_ultimatic_memory);
   RUN_TEST(test_wpm_change_next_element);
   RUN_TEST(test_event_reports_duration);
   RUN_TEST(test_wpm_clamped);

@@ -23,7 +23,7 @@ volatile bool ready = false;
 
 // core0 → core1 の設定（1語ずつなので volatile で十分）
 volatile uint8_t cfgWpm = 20;
-volatile uint8_t cfgMode = 1;
+volatile uint8_t cfgMode = (uint8_t)KeyerMode::B;
 volatile uint16_t cfgTone = 700;
 volatile bool cfgSidetone = true;
 volatile uint32_t cfgSeq = 0;
@@ -70,7 +70,7 @@ void engineBegin(const Config& cfg) {
 // 設定を共有変数に書き、番号を進める
 void engineApply(const Config& cfg) {
   cfgWpm = cfg.wpm;
-  cfgMode = cfg.mode == KeyerMode::A ? 0 : 1;
+  cfgMode = (uint8_t)cfg.mode;
   cfgTone = cfg.toneHz;
   cfgSidetone = cfg.sidetone;
   cfgSeq = cfgSeq + 1;
@@ -135,7 +135,7 @@ void loop1() {
   if (appliedSeq != cfgSeq) {
     appliedSeq = cfgSeq;
     keyer.setWpm(cfgWpm);
-    keyer.setMode(cfgMode == 0 ? KeyerMode::A : KeyerMode::B);
+    keyer.setMode((KeyerMode)cfgMode);
   }
 
   PlayRequest r;

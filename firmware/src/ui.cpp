@@ -67,7 +67,10 @@ void newPrompt() {
 void bumpSetting() {
   switch (settingIndex) {
     case 0: cfg->wpm = cfg->wpm >= WPM_MAX ? WPM_MIN : cfg->wpm + 1; break;
-    case 1: cfg->mode = cfg->mode == KeyerMode::A ? KeyerMode::B : KeyerMode::A; break;
+    case 1:  // A → B → U → A
+      cfg->mode = cfg->mode == KeyerMode::A ? KeyerMode::B
+                : cfg->mode == KeyerMode::B ? KeyerMode::Ultimatic : KeyerMode::A;
+      break;
     case 2: cfg->toneHz = cfg->toneHz + 50 > TONE_MAX ? TONE_MIN : cfg->toneHz + 50; break;
     case 3: cfg->sidetone = !cfg->sidetone; break;
     case 4: cfg->kochLevel = cfg->kochLevel >= KOCH_MAX ? KOCH_MIN : cfg->kochLevel + 1; break;
@@ -81,7 +84,7 @@ void bumpSetting() {
 void settingValue(uint8_t i, char* out, size_t n) {
   switch (i) {
     case 0: snprintf(out, n, "%u", cfg->wpm); break;
-    case 1: snprintf(out, n, "%c", cfg->mode == KeyerMode::A ? 'A' : 'B'); break;
+    case 1: snprintf(out, n, "%c", keyerModeChar(cfg->mode)); break;
     case 2: snprintf(out, n, "%u", cfg->toneHz); break;
     case 3: snprintf(out, n, "%s", cfg->sidetone ? "ON" : "OFF"); break;
     case 4: snprintf(out, n, "%u", cfg->kochLevel); break;

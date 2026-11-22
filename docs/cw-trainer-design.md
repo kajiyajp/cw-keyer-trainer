@@ -58,7 +58,8 @@
 ## 4. ファームウェア（Arduino / C++、earlephilhower Arduino-Pico コア＋Adafruit TinyUSB）
 
 - **RP2040 / RP2350 の両方で同じソースがビルドできること**（電池関連の処理だけ切り替え）
-- **キーヤー**：iambic Mode A / B 切替、速度 5〜40 WPM、短点・長点メモリ
+- **キーヤー**：iambic Mode A / B と Ultimatic の切替、速度 5〜40 WPM、短点・長点メモリ
+  - Ultimatic：両方を握ると、交互ではなく後から押した側を出し続ける（同時に押したら短点）
 - **サイドトーン**：ブザー、周波数と ON/OFF を設定可能
 - **解読**：打った符号を文字に変換（オフライン表示・PC 送信に使う）
 - **USB 複合デバイス**：シリアル（CDC）＋ キーボード（HID）を同時に出す
@@ -79,7 +80,7 @@
 1行1コマンドのテキスト形式（デバッグしやすさ優先）。
 
 ```
-PC → 機器:  SET WPM 20 / SET MODE B / SET TONE 700 / SET ECHOLEN 1 / SET HINT 1 / GET CONFIG / SAVE
+PC → 機器:  SET WPM 20 / SET MODE B（A / B / U、U は Ultimatic） / SET TONE 700 / SET ECHOLEN 1 / SET HINT 1 / GET CONFIG / SAVE
 機器 → PC:  E . 62        ← 要素（短点）とその長さ ms
             E - 185
             C A           ← 解読した文字

@@ -1,5 +1,5 @@
 // 作成：2026-11-21
-// 目的：iambic キーヤーの状態機械（Idle → Sending → Space → 次の要素）
+// 目的：キーヤーの状態機械（Idle → Sending → Space → 次の要素）。iambic A / B と Ultimatic
 #include "keyer.h"
 
 namespace {
@@ -16,21 +16,33 @@ void IambicKeyer::setWpm(uint8_t wpm) {
 
 // 反対側パドルの押下をメモリに残す
 // Mode A：押し始め（立ち上がり）だけ記録／Mode B：押されていれば記録
+// Ultimatic：押し始めで、しかもそれが後から押した側のときだけ記録（同時押しで反対側を足さない）
 void IambicKeyer::remember(bool dit, bool dah) {
-  bool ditTrigger = (mode_ == KeyerMode::B) ? dit : (dit && !prevDit_);
-  bool dahTrigger = (mode_ == KeyerMode::B) ? dah : (dah && !prevDah_);
+  bool ditTrigger, dahTrigger;
+  if (mode_ == KeyerMode::B) {
+    ditTrigger = dit;
+    dahTrigger = dah;
+  } else {
+    ditTrigger = dit && !prevDit_;
+    dahTrigger = dah && !prevDah_;
+    if (mode_ == KeyerMode::Ultimatic) {
+      ditTrigger = ditTrigger && lastPressed_ == '.';
+      dahTrigger = dahTrigger && lastPressed_ == '-';
+    }
+  }
   if (current_ == '-' && ditTrigger) memDit_ = true;
   if (current_ == '.' && dahTrigger) memDah_ = true;
 }
 
-// メモリ → 両押しなら交互 → 押されている側、の順で次の要素を決める
+// メモリ → 両押しなら交互（Ultimatic は後から押した側） → 押されている側、の順で次の要素を決める
 char IambicKeyer::nextSymbol(bool dit, bool dah) {
   char s = 0;
   if (memDit_ || memDah_) {
     s = memDit_ ? '.' : '-';
     if (memDit_ && memDah_) s = (last_ == '.') ? '-' : '.';
   } else if (dit && dah) {
-    s = (last_ == '.') ? '-' : '.';
+    if (mode_ == KeyerMode::Ultimatic) s = lastPressed_ ? lastPressed_ : '.';
+    else s = (last_ == '.') ? '-' : '.';
   } else if (dit) {
     s = '.';
   } else if (dah) {
@@ -54,6 +66,10 @@ void IambicKeyer::start(char symbol, uint32_t nowMs) {
 // 毎ループの処理
 KeyerEvent IambicKeyer::update(uint32_t nowMs, bool dit, bool dah) {
   KeyerEvent ev;
+
+  // 後から押されたパドルを覚える（同時に押されたら短点を優先）
+  if (dah && !prevDah_) lastPressed_ = '-';
+  if (dit && !prevDit_) lastPressed_ = '.';
 
   if (state_ == State::Sending && reached(nowMs, toneEnd_)) {
     ev.ended = true;

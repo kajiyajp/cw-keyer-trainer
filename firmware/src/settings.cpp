@@ -26,7 +26,7 @@ bool valid(const Config& c) {
   return c.wpm >= WPM_MIN && c.wpm <= WPM_MAX && c.toneHz >= TONE_MIN && c.toneHz <= TONE_MAX &&
          c.kochLevel >= KOCH_MIN && c.kochLevel <= KOCH_MAX &&
          c.echoLen >= ECHOLEN_MIN && c.echoLen <= ECHOLEN_MAX &&
-         (c.mode == KeyerMode::A || c.mode == KeyerMode::B);
+         (c.mode == KeyerMode::A || c.mode == KeyerMode::B || c.mode == KeyerMode::Ultimatic);
 }
 }  // namespace
 
