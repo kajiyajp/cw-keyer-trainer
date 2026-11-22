@@ -3,3 +3,5 @@
 __pycache__/
 node_modules/
 _site/
+# CADPAC-CREATOR で保存したファイル（各自の作業用。リポジトリには STEP を置く）
+*.ckd
