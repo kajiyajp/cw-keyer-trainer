@@ -45,7 +45,10 @@ uint32_t resultAt = 0;
 uint16_t scoreOk = 0, scoreAll = 0;
 char typed[12] = {0};
 
-char freeText[64] = {0};  // 自由打鍵の表示（末尾に追加し、あふれたら前を捨てる）
+// 自由打鍵の表示：エコー練習と同じ文字サイズ 2（12×16 ドット）で 1 行 10 文字 × 3 行。
+// 末尾に追加し、画面がいっぱいになったら 1 行（10 文字）分を前から捨てて上へ送る
+constexpr uint8_t FREE_COLS = 10, FREE_ROWS = 3;
+char freeText[FREE_COLS * FREE_ROWS + 1] = {0};
 
 Debouncer swIn(20);
 bool swPrev = false, longFired = false;
@@ -235,8 +238,16 @@ void draw() {
       break;
     case Screen::Free:
       oled.println("Free  (push:clear)");
-      oled.setTextSize(1);
-      oled.print(freeText);
+      oled.setTextSize(2);
+      for (uint8_t row = 0; row < FREE_ROWS; ++row) {   // 1 行ずつ書く（行の途中で折り返さない）
+        size_t start = row * FREE_COLS;
+        if (start >= strlen(freeText)) break;
+        char line[FREE_COLS + 1];
+        strncpy(line, freeText + start, FREE_COLS);
+        line[FREE_COLS] = '\0';
+        oled.setCursor(0, 12 + row * 17);
+        oled.print(line);
+      }
       break;
     case Screen::Settings:
       oled.println("Settings (push:next)");
@@ -274,7 +285,7 @@ void uiOnChar(char c) {
   if (screen == Screen::Free) {
     size_t len = strlen(freeText);
     if (len >= sizeof(freeText) - 1) {
-      memmove(freeText, freeText + 21, len - 21 + 1);  // 1行（21文字）分捨てる
+      memmove(freeText, freeText + FREE_COLS, len - FREE_COLS + 1);  // 1 行（10 文字）分捨てて上へ送る
       len = strlen(freeText);
     }
     freeText[len] = c;
