@@ -43,11 +43,14 @@ ROW = {"J": 5.5, "I": 4.5, "H": 3.5, "G": 2.5, "F": 1.5, "E": -1.5, "D": -2.5, "
        "T-": 8.75, "T+": 7.75, "B-": -7.75, "B+": -8.75}
 HEADER_H = 2.5                  # ピンヘッダーの樹脂部の高さ（XIAO・DIP 化基板を浮かせる分）
 
-# Seeed XIAO RP2040：D 行と H 行の 2〜8 列。USB-C を左の壁に向ける
+# Seeed XIAO RP2040：D 行と H 行の 1〜7 列（基板の左端に寄せる）。USB-C を左の壁に向ける
 XIAO_X, XIAO_Y, XIAO_T = 21.0, 17.5, 1.0
 XIAO_PARTS_H = 2.0              # XIAO の上の部品（USB-C を含む）の高さ
-XIAO_CX, XIAO_CY = col_x(5), (row_y(ROW["D"]) + row_y(ROW["H"])) / 2
-USB_W, USB_H = 15.0, 9.0        # 左の壁の USB-C 穴（ケーブルの根元が壁の中まで入る大きさ）
+XIAO_COLS = range(1, 8)
+XIAO_CX, XIAO_CY = col_x(4), (row_y(ROW["D"]) + row_y(ROW["H"])) / 2
+USB_OUT = 0.8                   # USB-C の差込口が XIAO の基板の端から出る長さ
+USB_WALL_GAP = 2.0              # USB-C の差込口と左の壁の内面のすき間（ケーブルを抜き差ししやすいように近づける）
+USB_W, USB_H = 13.0, 8.0        # 左の壁の USB-C 穴（ケーブルの根元が入る大きさ）
 
 # つまみ：EC12 エンコーダー（秋月 P-05772）＋ DIP 化基板 RECNV-2（P-07240）：C 行と I 行の 23〜27 列
 ENC_CX, ENC_CY = col_x(25), (row_y(ROW["C"]) + row_y(ROW["I"])) / 2   # 軸の位置
@@ -104,8 +107,12 @@ LIP_H, LIP_W, LIP_GAP = 1.5, 1.2, 0.2      # ふたの裏の位置合わせ用�
 KNOB_GAP = 1.0                  # ふたの上面とつまみの下面のすき間
 
 # ---------------- 計算で決まる寸法 ----------------
-IN_X = BOARD_X + 2 * MARGIN
+# 左の壁は USB-C の差込口から USB_WALL_GAP の所。右・奥は MARGIN、手前はブザーのぶん広く
+USB_FACE_X = XIAO_CX - XIAO_X / 2 - USB_OUT
+LEFT_IN, RIGHT_IN = USB_FACE_X - USB_WALL_GAP, BOARD_X / 2 + MARGIN
+IN_X = RIGHT_IN - LEFT_IN
 IN_Y = BOARD_Y + MARGIN + MARGIN_FRONT
+CASE_CX = (LEFT_IN + RIGHT_IN) / 2           # ケースの中心（基板の中心より右にずれる）
 CASE_CY = (MARGIN - MARGIN_FRONT) / 2        # ケースの中心（基板の中心より手前にずれる）
 OUT_X, OUT_Y = IN_X + 2 * WALL, IN_Y + 2 * WALL
 FRONT_IN = CASE_CY - IN_Y / 2                # 手前の壁の内面の Y
@@ -119,8 +126,9 @@ LID_TOP = SHAFT_TOP - ENC_KNURL_LEN - KNOB_GAP   # つまみの下に KNOB_GAP �
 BASE_H = LID_TOP - LID_T                     # 底ケースの壁の高さ（ふたの下面）
 
 BOARD_HOLES = [(col_x(1), 0.0), (col_x(30), 0.0)]   # 1 列目＝位置決めピン、30 列目＝皿ねじ＋ナット
-POST_CENTERS = [(sx * IN_X / 2, CASE_CY + sy * IN_Y / 2) for sx in (-1, 1) for sy in (-1, 1)]
-LID_SCREWS = [(sx * (IN_X / 2 - SCREW_IN), CASE_CY + sy * (IN_Y / 2 - SCREW_IN)) for sx in (-1, 1) for sy in (-1, 1)]
+POST_CENTERS = [(CASE_CX + sx * IN_X / 2, CASE_CY + sy * IN_Y / 2) for sx in (-1, 1) for sy in (-1, 1)]
+LID_SCREWS = [(CASE_CX + sx * (IN_X / 2 - SCREW_IN), CASE_CY + sy * (IN_Y / 2 - SCREW_IN))
+              for sx in (-1, 1) for sy in (-1, 1)]
 XIAO_Z = BOARD_TOP + HEADER_H
 USB_CZ = XIAO_Z + XIAO_T + 1.6
 JACK_CZ = BOARD_TOP + 6.0
@@ -136,9 +144,9 @@ def box_at(x, y, z, sx, sy, sz):
     return cq.Workplane("XY").box(sx, sy, sz, centered=(True, True, False)).translate((x, y, z))
 
 
-def rounded_box(x, y, h, r, z=0.0, cy=0.0):
-    """角を丸めた直方体（底面の中央が (0, cy, z)）"""
-    return cq.Workplane("XY").box(x, y, h, centered=(True, True, False)).edges("|Z").fillet(r).translate((0, cy, z))
+def rounded_box(x, y, h, r, z=0.0, cx=0.0, cy=0.0):
+    """角を丸めた直方体（底面の中央が (cx, cy, z)）"""
+    return cq.Workplane("XY").box(x, y, h, centered=(True, True, False)).edges("|Z").fillet(r).translate((cx, cy, z))
 
 
 def cylinder(d, h, x, y, z):
@@ -188,26 +196,28 @@ def hex_nut(x, y, z, direction=(0, 0, 1), af=M3_NUT_AF, h=M3_NUT_H, hole=3.0):
 # ---------------- ケース ----------------
 def make_walls():
     """壁と四隅の柱（すき間の確認にも使う）"""
-    outer = rounded_box(OUT_X, OUT_Y, BASE_H, CORNER_R, cy=CASE_CY)
-    walls = outer.cut(rounded_box(IN_X, IN_Y, BASE_H, 0.5, cy=CASE_CY))
+    outer = rounded_box(OUT_X, OUT_Y, BASE_H, CORNER_R, cx=CASE_CX, cy=CASE_CY)
+    walls = outer.cut(rounded_box(IN_X, IN_Y, BASE_H, 0.5, cx=CASE_CX, cy=CASE_CY))
     for x, y in POST_CENTERS:
         walls = walls.union(cylinder(2 * POST_R, BASE_H - FLOOR, x, y, FLOOR).intersect(outer))
     return walls
 
 
 def buzzer_bosses():
-    """手前の壁から、ブザーの耳まで伸びる台（ブザーの音の面を壁に当て、耳を台にねじ留め）"""
+    """手前の壁から、ブザーの耳まで伸びる台（ブザーの音の面を壁に当て、耳を台にねじ留め）。
+    3D プリンタで積層できるよう、床から立ち上がる縦のリブにし、上の端は半円で丸める（宙に浮いた所を作らない）"""
     length = BUZ_H - BUZ_EAR_T
     b = None
     for x, z in BUZ_EARS:
-        s = cylinder_y(BUZ_EAR_W, length, x, FRONT_IN, z)
-        b = s if b is None else b.union(s)
+        rib = box_at(x, FRONT_IN + length / 2, FLOOR, BUZ_EAR_W, length, z - FLOOR)
+        rib = rib.union(cylinder_y(BUZ_EAR_W, length, x, FRONT_IN, z))
+        b = rib if b is None else b.union(rib)
     return b
 
 
 def make_base():
     """底ケース：床・壁・四隅の柱・基板の台・ブザーの台・USB-C 穴・ジャック穴・音穴"""
-    shell = rounded_box(OUT_X, OUT_Y, FLOOR, CORNER_R, cy=CASE_CY).union(make_walls())
+    shell = rounded_box(OUT_X, OUT_Y, FLOOR, CORNER_R, cx=CASE_CX, cy=CASE_CY).union(make_walls())
     (px, py), (sx, sy) = BOARD_HOLES
     for x, y in BOARD_HOLES:
         shell = shell.union(cylinder(STANDOFF_D, STANDOFF_H, x, y, FLOOR))
@@ -223,7 +233,7 @@ def make_base():
     for x, z in pts:
         shell = shell.cut(cylinder_y(2.0, WALL + 2, x, FRONT_IN - WALL - 1, z))
     # 左の壁：USB-C（角の丸い長穴）／奥の壁：ジャック
-    usb = (cq.Workplane("YZ").workplane(offset=-OUT_X / 2 - 1)
+    usb = (cq.Workplane("YZ").workplane(offset=CASE_CX - OUT_X / 2 - 1)
            .center(XIAO_CY, USB_CZ).slot2D(USB_W, USB_H).extrude(WALL + 2))
     shell = shell.cut(usb)
     shell = shell.cut(cylinder_y(JACK_HOLE_D, WALL + 2, JACK_CX, BACK_IN - 1, JACK_CZ))
@@ -232,10 +242,10 @@ def make_base():
 
 def make_lid():
     """ふた：軸穴・OLED の窓とくぼみ・位置合わせのふち・四隅の皿ねじ穴"""
-    lid = rounded_box(OUT_X, OUT_Y, LID_T, CORNER_R, BASE_H, cy=CASE_CY)
+    lid = rounded_box(OUT_X, OUT_Y, LID_T, CORNER_R, BASE_H, cx=CASE_CX, cy=CASE_CY)
     ox, oy = IN_X - 2 * LIP_GAP, IN_Y - 2 * LIP_GAP
-    lip = rounded_box(ox, oy, LIP_H, 0.5, BASE_H - LIP_H, cy=CASE_CY)
-    lip = lip.cut(rounded_box(ox - 2 * LIP_W, oy - 2 * LIP_W, LIP_H, 0.5, BASE_H - LIP_H, cy=CASE_CY))
+    lip = rounded_box(ox, oy, LIP_H, 0.5, BASE_H - LIP_H, cx=CASE_CX, cy=CASE_CY)
+    lip = lip.cut(rounded_box(ox - 2 * LIP_W, oy - 2 * LIP_W, LIP_H, 0.5, BASE_H - LIP_H, cx=CASE_CX, cy=CASE_CY))
     for x, y in POST_CENTERS:
         lip = lip.cut(cylinder(2 * POST_R + 1, LIP_H + 1, x, y, BASE_H - LIP_H - 0.5))
     lid = lid.union(lip)
@@ -272,16 +282,19 @@ def make_board():
 def make_xiao():
     """XIAO RP2040：基板・USB-C・チップ・シールド（おおよその形）"""
     pcb = box_at(XIAO_CX, XIAO_CY, XIAO_Z, XIAO_X, XIAO_Y, XIAO_T)
-    usb = box_at(XIAO_CX - XIAO_X / 2 + 3.3, XIAO_CY, XIAO_Z + XIAO_T, 7.5, 8.9, 3.2)
+    usb = box_at(USB_FACE_X + 7.5 / 2, XIAO_CY, XIAO_Z + XIAO_T, 7.5, 8.9, 3.2)
     chip = box_at(XIAO_CX + 2.0, XIAO_CY, XIAO_Z + XIAO_T, 7.0, 7.0, 1.0)
     flash = box_at(XIAO_CX + 7.5, XIAO_CY, XIAO_Z + XIAO_T, 4.0, 5.0, 1.0)
     return pcb, usb.union(chip).union(flash)
 
 
-def make_headers():
-    """ピンヘッダー（樹脂部＋ピン）：XIAO の D 行・H 行、DIP 化基板の C 行・I 行"""
+HEADER_SETS = {"xiao": (XIAO_COLS, ("D", "H")), "enc": (range(23, 28), ("C", "I"))}
+
+
+def make_headers(which=("xiao", "enc")):
+    """ピンヘッダー（樹脂部＋ピン）：XIAO の D 行・H 行（"xiao"）、DIP 化基板の C 行・I 行（"enc"）"""
     plastic, pins = None, None
-    for cx, cols, rows in ((XIAO_CX, range(2, 9), ("D", "H")), (ENC_CX, range(23, 28), ("C", "I"))):
+    for cols, rows in (HEADER_SETS[w] for w in which):
         for r in rows:
             p = box_at((col_x(cols[0]) + col_x(cols[-1])) / 2, row_y(ROW[r]), BOARD_TOP, len(cols) * PITCH, PITCH, HEADER_H)
             plastic = p if plastic is None else plastic.union(p)
@@ -388,11 +401,13 @@ def check(base, lid, parts):
 
 
 def clearances(lid, parts):
-    """基板と基板の部品から、壁・柱・ふた・ブザーまでのすき間"""
+    """基板と基板の部品から、壁・柱・ふた・ブザーまでのすき間（左の壁＝USB 側は、わざと近づけているので別に表示する）"""
     walls = make_walls()
+    left = box_at(LEFT_IN - WALL - 1 + (WALL + 1 + POST_R + 1) / 2, CASE_CY, 0, WALL + 1 + POST_R + 1, OUT_Y + 2, BASE_H + 1)
+    walls = walls.cut(left)           # 左の壁と左の柱を除いた壁
     rows = []
     for n in ("基板", "XIAO", "DIP 化基板", "エンコーダー"):
-        rows.append((n, "壁・柱", gap(parts[n], walls)))
+        rows.append((n, "壁・柱（左の壁を除く）", gap(parts[n], walls)))
     for n in ("基板", "XIAO", "DIP 化基板", "エンコーダー"):
         rows.append((n, "ブザー", gap(parts[n], parts["ブザー"])))
     rows.append(("XIAO", "ふた・OLED", min(gap(parts["XIAO"], lid), gap(parts["XIAO"], parts["OLED 基板"]))))
@@ -401,41 +416,185 @@ def clearances(lid, parts):
 
 
 # ---------------- 組み立て STEP ----------------
-def make_assembly(base, lid):
-    """ケースに全部品とねじを組み付けた状態（色付き）。部品名はほかの CAD で文字化けしないよう英数字にする"""
+# レベル（CAD のレイヤー）の名前と中身。STEP では、レベルごとのグループ（組み立ての階層）と、
+# 部品ごとのレイヤー（PRESENTATION_LAYER_ASSIGNMENT）の両方に同じ名前を付ける。名前は英数字（文字化け防止）
+LEVELS = ["CASE", "COVER", "PCB", "XIAO", "ENC", "OLED", "bzz", "TRS", "M3_CASE_SCREW", "M3_BZ_SCREW", "M3_PCB_SCREW"]
+
+
+def make_level_parts(base, lid):
+    """レベル名 → [(部品名, 形, 色)]"""
     C = cq.Color
-    a = cq.Assembly(name="cw_keyer_trainer")
-    a.add(base, name="case_base", color=C(0.82, 0.82, 0.80, 1))
-    a.add(lid, name="case_lid", color=C(0.90, 0.75, 0.50, 1))
-    a.add(make_board(), name="board_akizuki_104303", color=C(0.85, 0.80, 0.55, 1))
-    pcb, comps = make_xiao()
-    a.add(pcb, name="xiao_rp2040_pcb", color=C(0.10, 0.35, 0.20, 1))
-    a.add(comps, name="xiao_rp2040_parts", color=C(0.75, 0.75, 0.78, 1))
-    plastic, pins = make_headers()
-    a.add(plastic, name="pin_header_plastic", color=C(0.1, 0.1, 0.1, 1))
-    a.add(pins, name="pin_header_pins", color=C(0.85, 0.70, 0.30, 1))
-    adapter, body, shaft, knob = make_encoder()
-    a.add(adapter, name="encoder_adapter_recnv2", color=C(0.20, 0.35, 0.70, 1))
-    a.add(body, name="encoder_ec12", color=C(0.25, 0.25, 0.25, 1))
-    a.add(shaft, name="encoder_shaft", color=C(0.80, 0.80, 0.82, 1))
-    a.add(knob, name="knob", color=C(0.15, 0.15, 0.15, 1))
-    opcb, glass = make_oled()
-    a.add(opcb, name="oled_pcb", color=C(0.10, 0.20, 0.55, 1))
-    a.add(glass, name="oled_glass", color=C(0.05, 0.05, 0.05, 1))
-    a.add(make_buzzer(), name="buzzer", color=C(0.12, 0.12, 0.12, 1))
-    jack, jnut = make_jack()
-    a.add(jack, name="jack_3p5mm_trs", color=C(0.30, 0.30, 0.30, 1))
-    a.add(jnut, name="jack_nut", color=C(0.80, 0.80, 0.82, 1))
     steel = C(0.70, 0.70, 0.72, 1)
-    for i, (x, y) in enumerate(LID_SCREWS):
-        a.add(csk_screw(x, y, LID_TOP, (0, 0, -1), LID_SCREW_LEN), name=f"lid_screw_m3x{LID_SCREW_LEN}_{i + 1}", color=steel)
+    black = C(0.10, 0.10, 0.10, 1)
+    gold = C(0.85, 0.70, 0.30, 1)
+    pcb, comps = make_xiao()
+    xh_plastic, xh_pins = make_headers(("xiao",))
+    eh_plastic, eh_pins = make_headers(("enc",))
+    adapter, body, shaft, knob = make_encoder()
+    opcb, glass = make_oled()
+    jack, jnut = make_jack()
     sx, sy = BOARD_HOLES[1]
-    a.add(csk_screw(sx, sy, 0.0, (0, 0, 1), BOARD_SCREW_LEN), name=f"board_screw_m3x{BOARD_SCREW_LEN}", color=steel)
-    a.add(hex_nut(sx, sy, BOARD_TOP), name="board_nut_m3", color=steel)
+    lv = {
+        "CASE": [("case_base", base, C(0.82, 0.82, 0.80, 1))],
+        "COVER": [("case_lid", lid, C(0.90, 0.75, 0.50, 1))],
+        "PCB": [("board_akizuki_104303", make_board(), C(0.85, 0.80, 0.55, 1))],
+        "XIAO": [("xiao_rp2040_pcb", pcb, C(0.10, 0.35, 0.20, 1)),
+                 ("xiao_rp2040_parts", comps, C(0.75, 0.75, 0.78, 1)),
+                 ("xiao_header_plastic", xh_plastic, black),
+                 ("xiao_header_pins", xh_pins, gold)],
+        "ENC": [("encoder_adapter_recnv2", adapter, C(0.20, 0.35, 0.70, 1)),
+                ("encoder_ec12", body, C(0.25, 0.25, 0.25, 1)),
+                ("encoder_shaft", shaft, C(0.80, 0.80, 0.82, 1)),
+                ("knob", knob, C(0.15, 0.15, 0.15, 1)),
+                ("encoder_header_plastic", eh_plastic, black),
+                ("encoder_header_pins", eh_pins, gold)],
+        "OLED": [("oled_pcb", opcb, C(0.10, 0.20, 0.55, 1)),
+                 ("oled_glass", glass, C(0.05, 0.05, 0.05, 1))],
+        "bzz": [("buzzer", make_buzzer(), C(0.12, 0.12, 0.12, 1))],
+        "TRS": [("jack_3p5mm_trs", jack, C(0.30, 0.30, 0.30, 1)),
+                ("jack_nut", jnut, C(0.80, 0.80, 0.82, 1))],
+        "M3_CASE_SCREW": [(f"lid_screw_m3x{LID_SCREW_LEN}_{i + 1}", csk_screw(x, y, LID_TOP, (0, 0, -1), LID_SCREW_LEN), steel)
+                          for i, (x, y) in enumerate(LID_SCREWS)],
+        "M3_BZ_SCREW": [],
+        "M3_PCB_SCREW": [(f"board_screw_m3x{BOARD_SCREW_LEN}", csk_screw(sx, sy, 0.0, (0, 0, 1), BOARD_SCREW_LEN), steel),
+                         ("board_nut_m3", hex_nut(sx, sy, BOARD_TOP), steel)],
+    }
     for i, (x, z) in enumerate(BUZ_EARS):
-        a.add(csk_screw(x, FRONT_IN - WALL, z, (0, 1, 0), BUZ_SCREW_LEN), name=f"buzzer_screw_m3x{BUZ_SCREW_LEN}_{i + 1}", color=steel)
-        a.add(hex_nut(x, FRONT_IN + BUZ_H, z, (0, 1, 0)), name=f"buzzer_nut_m3_{i + 1}", color=steel)
+        lv["M3_BZ_SCREW"].append((f"buzzer_screw_m3x{BUZ_SCREW_LEN}_{i + 1}",
+                                  csk_screw(x, FRONT_IN - WALL, z, (0, 1, 0), BUZ_SCREW_LEN), steel))
+        lv["M3_BZ_SCREW"].append((f"buzzer_nut_m3_{i + 1}", hex_nut(x, FRONT_IN + BUZ_H, z, (0, 1, 0)), steel))
+    return lv
+
+
+def make_assembly(level_parts):
+    """レベルごとのグループに部品を入れた組み立て（色付き）"""
+    a = cq.Assembly(name="cw_keyer_trainer")
+    for level in LEVELS:
+        g = cq.Assembly(name=level)
+        for name, shape, color in level_parts[level]:
+            solids = shape.solids().vals()
+            if len(solids) == 1:     # 1 つの立体だけの「まとまり」は立体そのものにする（レイヤーが付くように）
+                shape = cq.Workplane(obj=solids[0])
+            g.add(shape, name=name, color=color)
+        a.add(g, name=level)
     return a
+
+
+def export_step_with_levels(assy, level_parts, path):
+    """組み立てを STEP に書き出し、部品ごとにレベル名のレイヤーを付ける"""
+    from cadquery.occ_impl.assembly import toCAF
+    from OCP.STEPCAFControl import STEPCAFControl_Writer
+    from OCP.STEPControl import STEPControl_AsIs
+    from OCP.TCollection import TCollection_ExtendedString
+    from OCP.TDataStd import TDataStd_Name
+    from OCP.TDF import TDF_LabelSequence
+    from OCP.TopAbs import TopAbs_COMPOUND, TopAbs_SOLID
+    from OCP.TopExp import TopExp_Explorer
+    from OCP.XCAFDoc import XCAFDoc_DocumentTool
+
+    level_of = {name: level for level, items in level_parts.items() for name, _, _ in items}
+    _, doc = toCAF(assy, coloredSTEP=True)
+    shapes = XCAFDoc_DocumentTool.ShapeTool_s(doc.Main())
+    layers = XCAFDoc_DocumentTool.LayerTool_s(doc.Main())
+    seq = TDF_LabelSequence()
+    shapes.GetShapes(seq)
+    done = 0
+    for i in range(1, seq.Length() + 1):
+        label = seq.Value(i)
+        attr = TDataStd_Name()
+        if not label.FindAttribute(TDataStd_Name.GetID_s(), attr):
+            continue
+        level = level_of.get(attr.Get().ToExtString())
+        if level:
+            layers.SetLayer(label, TCollection_ExtendedString(level))
+            # 立体がいくつも入った部品（ピンなど）は、STEP に書くとき部品の単位ではレイヤーが残らないので、立体ごとにも付ける
+            shape = shapes.GetShape_s(label)
+            if shape.ShapeType() == TopAbs_COMPOUND:
+                exp = TopExp_Explorer(shape, TopAbs_SOLID)
+                while exp.More():
+                    sub = shapes.AddSubShape(label, exp.Current())
+                    if not sub.IsNull():
+                        layers.SetLayer(sub, TCollection_ExtendedString(level))
+                    exp.Next()
+            done += 1
+    writer = STEPCAFControl_Writer()
+    writer.SetColorMode(True)
+    writer.SetNameMode(True)
+    writer.SetLayerMode(True)
+    writer.Transfer(doc, STEPControl_AsIs)
+    writer.Write(str(path))
+    # レイヤーの説明欄（OCCT は 'visible' と書く）にもレベル名を入れる。CAD によってはこちらをレベル名として読むため
+    import re
+    text = Path(path).read_text(encoding="utf-8", errors="surrogateescape")
+    text = re.sub(r"PRESENTATION_LAYER_ASSIGNMENT\('([^']*)','[^']*'",
+                  lambda m: f"PRESENTATION_LAYER_ASSIGNMENT('{m.group(1)}','{m.group(1)}'", text)
+    text = renumber_step(text, LEVEL_NUMBER_START)
+    Path(path).write_text(text, encoding="utf-8", errors="surrogateescape")
+    return done
+
+
+LEVEL_NUMBER_START = 1   # レベル番号の始まり（CAD はレイヤーの通し番号をレベル番号に使う。1 番と重なって困るなら 2 に）
+
+
+def renumber_step(text, start):
+    """STEP の通し番号（#N）を振り直す。レイヤー（レベル）を LEVELS の順に start から並べ、ほかはその後ろに続ける。
+    文字列（'…'）の中の # は書き換えない"""
+    import re
+    head, sep, rest = text.partition("DATA;")
+    body, sep2, tail = rest.partition("ENDSEC;")
+    # 1 つの実体（#N = …;）ずつに分ける（文字列の中の ; は区切りにしない）
+    entities, buf, in_str = [], [], False
+    for ch in body:
+        buf.append(ch)
+        if ch == "'":
+            in_str = not in_str
+        elif ch == ";" and not in_str:
+            entities.append("".join(buf).strip())
+            buf = []
+    ent_re = re.compile(r"#(\d+)\s*=\s*(.*)", re.S)
+    parsed = []
+    for e in entities:
+        m = ent_re.match(e)
+        if m:
+            parsed.append((int(m.group(1)), m.group(2)))
+    layer_ids = {}
+    for old, rhs in parsed:
+        m = re.match(r"PRESENTATION_LAYER_ASSIGNMENT\('([^']*)'", rhs)
+        if m:
+            layer_ids[m.group(1)] = old
+    order = [layer_ids[n] for n in LEVELS if n in layer_ids]
+    new_id, n = {}, start
+    for old in order:
+        new_id[old] = n
+        n += 1
+    nxt = max(n, start + len(LEVELS))
+    for old, _ in parsed:
+        if old not in new_id:
+            new_id[old] = nxt
+            nxt += 1
+
+    def fix_refs(s):
+        out, i, in_s = [], 0, False
+        while i < len(s):
+            ch = s[i]
+            if ch == "'":
+                in_s = not in_s
+                out.append(ch)
+                i += 1
+            elif ch == "#" and not in_s:
+                j = i + 1
+                while j < len(s) and s[j].isdigit():
+                    j += 1
+                out.append(f"#{new_id[int(s[i + 1:j])]}")
+                i = j
+            else:
+                out.append(ch)
+                i += 1
+        return "".join(out)
+
+    lines = [f"#{new_id[old]} = {fix_refs(rhs)}" for old, rhs in parsed]
+    lines.sort(key=lambda l: int(l[1:l.index(" ")]))
+    return head + sep + "\n" + "\n".join(lines) + "\n" + sep2 + tail
 
 
 def render(shapes, path, elev, azim, title):
@@ -495,19 +654,25 @@ def main():
     for a, b, g in clearances(lid, parts):
         print(f"  {a} → {b}：{g:.1f} mm {'OK' if g >= MIN_CLEAR - 0.05 else '（不足）'}")
     print(f"  エンコーダー → ふた：{BASE_H - (ENC_MOUNT_Z + ENC_BODY_H):.1f} mm（軸がふたを通るため、軸の長さで決まる。例外）")
+    print(f"  USB-C の差込口 → 左の壁：{USB_FACE_X - LEFT_IN:.1f} mm、基板 → 左の壁：{-BOARD_X / 2 - LEFT_IN:.1f} mm"
+          "（ケーブルを抜き差ししやすいよう近づけた。例外）")
 
     cq.exporters.export(base, str(OUT / "case_base.step"))
     cq.exporters.export(lid, str(OUT / "case_lid.step"))
     cq.exporters.export(base, str(OUT / "case_base.stl"), tolerance=0.05, angularTolerance=0.2)
     lid_print = lid.rotate((0, 0, 0), (1, 0, 0), 180).translate((0, 0, LID_TOP))
     cq.exporters.export(lid_print, str(OUT / "case_lid.stl"), tolerance=0.05, angularTolerance=0.2)
-    assy = make_assembly(base, lid)
-    assy.export(str(OUT / "assembly.step"))
+    level_parts = make_level_parts(base, lid)
+    assy = make_assembly(level_parts)
+    n = export_step_with_levels(assy, level_parts, OUT / "assembly.step")
+    print(f"assembly.step：レベル {len(LEVELS)} 個（{', '.join(LEVELS)}）、部品 {n} 個にレイヤーを付けた")
 
     ghost = [(s, (0.2, 0.5, 0.9), 0.9) for s in parts.values()]
     render([(base, (0.85, 0.85, 0.82), 1.0)], OUT / "preview_base.png", 30, -130, "底ケース（左に USB-C、奥にジャック、手前にブザー）")
     render([(base, (0.85, 0.85, 0.82), 1.0)], OUT / "preview_bottom.png", -40, -60, "底ケースの裏（基板を留める皿ねじ）")
     render([(base, (0.85, 0.85, 0.82), 1.0)], OUT / "preview_front.png", 15, -95, "手前の壁（ブザーの音穴と皿ねじ）")
+    render([(base, (0.85, 0.85, 0.82), 1.0)], OUT / "preview_buzzer_mount.png", 35, 70,
+           "ブザーの取付台（床から立ち上がるリブ。サポートなしで印刷できる）")
     render([(lid, (0.85, 0.85, 0.82), 1.0)], OUT / "preview_lid.png", -35, -60, "ふた（裏から）")
     render([(base, (0.85, 0.85, 0.82), 1.0), (lid, (0.9, 0.75, 0.5), 1.0)],
            OUT / "preview_top.png", 40, -65, "組み立てた外観（OLED の窓・つまみの穴・皿ねじ）")
@@ -515,12 +680,11 @@ def main():
            OUT / "preview_assembly.png", 28, -55, "組み立て（部品は青）")
     # 組み立て STEP の中身（ふたを外して上から）
     shown = []
-    for child in assy.children:
-        if child.name == "case_lid":
+    for level in LEVELS:
+        if level == "COVER":
             continue
-        rgba = child.color.toTuple() if child.color else (0.5, 0.5, 0.5, 1)
-        alpha = 0.35 if child.name == "case_base" else 1.0
-        shown.append((cq.Workplane(obj=child.obj.val()), rgba[:3], alpha))
+        for name, shape, color in level_parts[level]:
+            shown.append((shape, color.toTuple()[:3], 0.35 if level == "CASE" else 1.0))
     render(shown, OUT / "preview_parts.png", 45, -60, "assembly.step の中身（ふたを外した状態）")
     print(f"書き出し：{OUT}")
 
