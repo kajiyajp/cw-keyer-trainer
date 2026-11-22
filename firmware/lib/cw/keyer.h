@@ -1,9 +1,15 @@
 // 作成：2026-11-21
-// 目的：iambic キーヤー（Mode A / B、短点・長点メモリ）。時刻は引数で受け取りハードに依存しない
+// 目的：キーヤー（iambic Mode A / B と Ultimatic、短点・長点メモリ）。時刻は引数で受け取りハードに依存しない
 #pragma once
 #include <stdint.h>
 
-enum class KeyerMode : uint8_t { A, B };
+// A / B：両押しで交互（iambic）／Ultimatic：両押しで後から押した側を続ける
+enum class KeyerMode : uint8_t { A, B, Ultimatic };
+
+// モードを1文字にする（シリアル・OLED 表示用）：A / B / U
+inline char keyerModeChar(KeyerMode m) {
+  return m == KeyerMode::A ? 'A' : m == KeyerMode::B ? 'B' : 'U';
+}
 
 // update() の結果。started：要素が始まった／ended：要素が終わった（symbol と durationMs は終わった要素のもの）
 struct KeyerEvent {
@@ -17,7 +23,7 @@ class IambicKeyer {
  public:
   // 速度を設定する（5〜40 に丸める）。次の要素から反映
   void setWpm(uint8_t wpm);
-  // Mode A / B を設定する
+  // Mode A / B / Ultimatic を設定する
   void setMode(KeyerMode m) { mode_ = m; }
   // 毎ループ呼び、パドル状態から要素を進める
   KeyerEvent update(uint32_t nowMs, bool dit, bool dah);
@@ -43,6 +49,7 @@ class IambicKeyer {
   State state_ = State::Idle;
   char current_ = 0;        // 送信中（または直前）の要素
   char last_ = 0;           // 最後に送った要素
+  char lastPressed_ = 0;    // 後から押されたパドル（Ultimatic で使う。同時なら短点）
   uint32_t toneEnd_ = 0;    // トーン終了時刻
   uint32_t spaceEnd_ = 0;   // 要素間スペース終了時刻
   uint16_t elemLen_ = 0;    // 送信中要素の長さ

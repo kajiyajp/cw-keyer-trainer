@@ -10,9 +10,9 @@ const APP_FIELDS = [
   ['effWpm', '実効の速さ (WPM)', 5, 40, 1],
   ['groups', 'グループ数', 1, 10, 1],
 ];
-// 機器の設定項目 [キー, 名前, 最小, 最大]（MODE は A/B）
+// 機器の設定項目 [キー, 名前, 最小, 最大]（MODE は A/B/U。U は Ultimatic）
 const DEV_FIELDS = [
-  ['WPM', '速さ (WPM)', 5, 40], ['MODE', 'モード (A/B)'], ['TONE', '音の高さ (Hz)', 400, 1200],
+  ['WPM', '速さ (WPM)', 5, 40], ['MODE', 'モード (A/B/U)'], ['TONE', '音の高さ (Hz)', 400, 1200],
   ['SIDETONE', 'サイドトーン (0/1)', 0, 1], ['KOCH', 'Koch レベル', 2, 41],
   ['ECHOLEN', 'エコー文字数', 1, 5], ['HINT', 'ヒント (0/1)', 0, 1],
 ];
@@ -155,7 +155,7 @@ export function mountSettings(el, ctx) {
     let bad = false;
     for (const [k, , lo, hi] of DEV_FIELDS) {
       const v = input(k).value.trim().toUpperCase();
-      const ok = k === 'MODE' ? v === 'A' || v === 'B' : inRange(v, lo, hi);
+      const ok = k === 'MODE' ? ['A', 'B', 'U'].includes(v) :inRange(v, lo, hi);
       input(k).classList.toggle('ng', !ok);
       bad ||= !ok;
     }

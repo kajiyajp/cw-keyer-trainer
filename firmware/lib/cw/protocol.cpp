@@ -48,6 +48,7 @@ CmdResult handleSet(const char* key, const char* val, Config& cfg) {
   } else if (strcmp(key, "MODE") == 0) {
     if (strcmp(val, "A") == 0) cfg.mode = KeyerMode::A;
     else if (strcmp(val, "B") == 0) cfg.mode = KeyerMode::B;
+    else if (strcmp(val, "U") == 0) cfg.mode = KeyerMode::Ultimatic;
     else return CmdResult::Err;
   } else if (strcmp(key, "TONE") == 0) {
     if (!parseRange(val, TONE_MIN, TONE_MAX, v)) return CmdResult::Err;
@@ -84,7 +85,7 @@ CmdResult handleLine(const char* line, Config& cfg) {
 // 設定を1行にする
 void formatConfig(const Config& cfg, char* out, size_t n) {
   snprintf(out, n, "CONFIG WPM=%u MODE=%c TONE=%u SIDETONE=%u KOCH=%u ECHOLEN=%u HINT=%u", cfg.wpm,
-           cfg.mode == KeyerMode::A ? 'A' : 'B', cfg.toneHz, cfg.sidetone ? 1u : 0u, cfg.kochLevel,
+           keyerModeChar(cfg.mode), cfg.toneHz, cfg.sidetone ? 1u : 0u, cfg.kochLevel,
            cfg.echoLen, cfg.hint ? 1u : 0u);
 }
 

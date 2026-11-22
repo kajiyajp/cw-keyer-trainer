@@ -70,6 +70,10 @@ void test_crlf_lowercase() {
   Config c;
   TEST_ASSERT(handleLine("set mode a\r", c) == CmdResult::Ok);
   TEST_ASSERT(c.mode == KeyerMode::A);
+  TEST_ASSERT(handleLine("SET MODE U", c) == CmdResult::Ok);
+  TEST_ASSERT(c.mode == KeyerMode::Ultimatic);
+  TEST_ASSERT(handleLine("SET MODE X", c) == CmdResult::Err);
+  TEST_ASSERT(c.mode == KeyerMode::Ultimatic);
   TEST_ASSERT(handleLine("  SET   SIDETONE  0 ", c) == CmdResult::Ok);
   TEST_ASSERT_FALSE(c.sidetone);
 }
@@ -84,6 +88,9 @@ void test_format_config() {
   Config c; char b[96];
   formatConfig(c, b, sizeof b);
   TEST_ASSERT_EQUAL_STRING("CONFIG WPM=20 MODE=B TONE=700 SIDETONE=1 KOCH=2 ECHOLEN=1 HINT=1", b);
+  c.mode = KeyerMode::Ultimatic;
+  formatConfig(c, b, sizeof b);
+  TEST_ASSERT_EQUAL_STRING("CONFIG WPM=20 MODE=U TONE=700 SIDETONE=1 KOCH=2 ECHOLEN=1 HINT=1", b);
 }
 
 void test_format_element_and_char() {
