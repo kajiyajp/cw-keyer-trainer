@@ -37,6 +37,14 @@ IambicKeyer keyer;
 Debouncer ditIn(5), dahIn(5);
 Player player;
 uint16_t playHz = 700;
+bool keyLedOn = false;  // サイドトーン OFF のとき、打鍵中につまみの青 LED を点ける
+
+// 打鍵の表示 LED を、変化したときだけ切り替える（core0 の「正解」点灯を毎回消さないため）
+void keyLedSet(bool on) {
+  if (on == keyLedOn) return;
+  keyLedOn = on;
+  digitalWrite(PIN_KNOB_BLUE, on ? HIGH : LOW);
+}
 bool buzzerOn = false;
 uint16_t buzzerHz = 0;
 uint32_t appliedSeq = 0;
@@ -153,6 +161,7 @@ void loop1() {
     KeyerEvent ev = keyer.update(now, false, false);
     if (ev.ended) pushEvent(false, ev.symbol, ev.durationMs, now);
     keyerIdle = keyer.idle();
+    keyLedSet(false);
     if (!player.busy()) playDone = playDone + 1;
     return;
   }
@@ -166,5 +175,6 @@ void loop1() {
   if (ev.ended) pushEvent(false, ev.symbol, ev.durationMs, now);
   if (ev.started) pushEvent(true, ev.symbol, 0, now);
   buzzerSet(keyer.keyDown() && cfgSidetone, cfgTone);
+  keyLedSet(keyer.keyDown() && !cfgSidetone);
   keyerIdle = keyer.idle() && !dit && !dah;
 }

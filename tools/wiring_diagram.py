@@ -1,8 +1,8 @@
 # 作成：2026-11-21
-# 目的：XIAO RP2040 とタクトスイッチ・ブザー・OLED の配線図（docs/wiring.png）を生成する
+# 目的：XIAO RP2040 とパドル・圧電サウンダ・OLED・つまみ（LED 付きロータリーエンコーダー）の配線図（docs/wiring.png）を生成する
 from PIL import Image, ImageDraw, ImageFont
 
-W, H = 1500, 1100
+W, H = 1500, 1160
 img = Image.new("RGB", (W, H), "white")
 d = ImageDraw.Draw(img)
 
@@ -14,7 +14,8 @@ f_small = ImageFont.truetype(FONT, 16)
 
 GND_C = (40, 40, 40)
 COL = {"D0": (220, 50, 50), "D1": (30, 110, 220), "D2": (230, 140, 0), "D3": (40, 160, 80),
-       "D4": (140, 60, 200), "D5": (0, 160, 170), "D6": (200, 60, 150), "3V3": (210, 30, 30)}
+       "D4": (140, 60, 200), "D5": (0, 160, 170), "D6": (200, 60, 150), "D7": (110, 140, 20),
+       "D8": (150, 90, 40), "D9": (230, 40, 40), "D10": (40, 80, 230), "3V3": (210, 30, 30)}
 
 
 # ピンの y 座標（上から i 番目）
@@ -44,7 +45,16 @@ def switch(x1, x2, y, color, label):
     d.text(((x1 + x2) / 2, y + 14), label, font=f_mid, fill="black", anchor="mt")
 
 
-# 圧電ブザー記号
+# 抵抗記号（x1〜x2 の間、高さ y）
+def resistor(x1, x2, y, color, label):
+    cx = (x1 + x2) / 2
+    wire([(x1, y), (cx - 30, y)], color)
+    wire([(cx + 30, y), (x2, y)], color)
+    d.rectangle([cx - 30, y - 11, cx + 30, y + 11], outline="black", width=3, fill="white")
+    d.text((cx, y - 16), label, font=f_small, fill="black", anchor="mb")
+
+
+# 圧電サウンダ記号
 def buzzer(x1, x2, y, color, label):
     cx = (x1 + x2) / 2
     wire([(x1, y), (cx - 30, y)], GND_C)
@@ -84,8 +94,7 @@ d.text((GX - 10, pin_y(0) - 40), "GND", font=f_big, fill=GND_C, anchor="mm")
 
 # ---- 左側の部品 ----
 X_PART1, X_PART2 = 250, 430
-parts = {0: ("sw", "短点レバー（DIT）"), 1: ("sw", "長点レバー（DAH）"), 2: ("bz", "圧電ブザー（パッシブ）"),
-         3: ("sw", "MENU ボタン"), 6: ("sw", "OK ボタン")}
+parts = {0: ("sw", "短点レバー（DIT）"), 1: ("sw", "長点レバー（DAH）"), 2: ("bz", "圧電サウンダ（パッシブ）")}
 for i, (kind, label) in parts.items():
     y = pin_y(i)
     color = COL[left[i][:2]]
@@ -106,8 +115,17 @@ for i, net in ((4, "SDA"), (5, "SCL")):
     d.polygon([(460, y - 16), (330, y - 16), (310, y), (330, y + 16), (460, y + 16)], fill=color)
     d.text((385, y), f"OLED {net}", font=f_mid, fill="white", anchor="mm")
 
+# D3 は空き
+d.text((BX1 - 30, pin_y(3)), "（空き）", font=f_mid, fill=(120, 120, 120), anchor="rm")
+
+# D6 はつまみの押しボタンへ（ネットラベル）
+y6 = pin_y(6)
+wire([(BX1 - 12, y6), (460, y6)], COL["D6"])
+d.polygon([(460, y6 - 16), (250, y6 - 16), (230, y6), (250, y6 + 16), (460, y6 + 16)], fill=COL["D6"])
+d.text((345, y6), "つまみ SW（端子4）", font=f_mid, fill="white", anchor="mm")
+
 # ---- OLED（右側）----
-OX1, OY1, OX2, OY2 = 1110, 230, 1420, 520
+OX1, OY1, OX2, OY2 = 1110, 210, 1420, 440
 d.rounded_rectangle([OX1, OY1, OX2, OY2], radius=12, fill=(20, 40, 120), outline="black", width=4)
 d.rectangle([OX1 + 25, OY1 + 90, OX2 - 25, OY2 - 25], fill="black")
 d.text(((OX1 + OX2) / 2, (OY1 + OY2) / 2 + 30), "0.96\" OLED\nSSD1306 (I2C)", font=f_mid, fill=(120, 200, 255), anchor="mm", align="center")
@@ -129,16 +147,49 @@ for k, net, col in ((2, "SCL ← D5", COL["D5"]), (3, "SDA ← D4", COL["D4"])):
 d.text((OX1 + 225, OY1 - 30), "SCL←D5  SDA←D4", font=f_mid, fill="black", anchor="mm")
 d.text(((OX1 + OX2) / 2, OY2 + 25), "※ピン順は製品ごとに違います。基板の印字に合わせてください", font=f_small, fill="black", anchor="mt")
 
+# ---- つまみ：LED 付きロータリーエンコーダー（右下）----
+EX1, EY1, EX2, EY2 = 1180, 490, 1440, 860
+d.rounded_rectangle([EX1, EY1, EX2, EY2], radius=12, fill=(60, 60, 60), outline="black", width=4)
+d.ellipse([EX1 + 150, EY1 + 100, EX1 + 240, EY1 + 190], fill=(150, 150, 150), outline="black", width=3)
+d.text((EX1 + 195, EY1 + 215), "つまみ", font=f_small, fill="white", anchor="mt")
+d.text((EX1 + 195, EY1 + 238), "EC12 (LED付)", font=f_small, fill="white", anchor="mt")
+# 左辺の端子：上から 3(赤) 2(青) B A
+term_rows = {"D10": ("2 青LED+", "100Ω〜"), "D9": ("3 赤LED+", "1kΩ〜"), "D8": ("B", None), "D7": ("A", None)}
+for i, name in ((3, "D10"), (4, "D9"), (5, "D8"), (6, "D7")):
+    y = pin_y(i)
+    color = COL[name]
+    label, res = term_rows[name]
+    if res:
+        wire([(BX2 + 12, y), (1060, y)], color)
+        resistor(1060, EX1, y, color, res)
+    else:
+        wire([(BX2 + 12, y), (EX1, y)], color)
+    d.rectangle([EX1 - 8, y - 8, EX1 + 8, y + 8], fill=(230, 190, 60), outline="black", width=2)
+    d.text((EX1 + 16, y), label, font=f_small, fill="white", anchor="lm")
+# 下辺の端子：C と 1 は GND、4 は D6 へ
+for x, label in ((EX1 + 40, "C"), (EX1 + 110, "1"), (EX1 + 200, "4")):
+    d.rectangle([x - 8, EY2 - 8, x + 8, EY2 + 8], fill=(230, 190, 60), outline="black", width=2)
+    d.text((x, EY2 - 16), label, font=f_small, fill="white", anchor="mb")
+for x in (EX1 + 40, EX1 + 110):
+    wire([(x, EY2 + 8), (x, BUS_Y)], GND_C)
+    dot(x, BUS_Y)
+wire([(1000, BUS_Y), (EX1 + 110, BUS_Y)], GND_C, 6)
+x4 = EX1 + 200
+wire([(x4, EY2 + 8), (x4, EY2 + 30)], COL["D6"])
+d.rounded_rectangle([x4 - 30, EY2 + 30, x4 + 30, EY2 + 60], radius=6, fill=COL["D6"])
+d.text((x4, EY2 + 45), "→D6", font=f_small, fill="white", anchor="mm")
+
 # ---- 凡例・注意 ----
 notes = [
     "● スイッチは「ピン ↔ GND」をつなぐだけ。プルアップは XIAO 内部で有効にするので抵抗は不要です",
-    "● 4本足のタクトスイッチは、対角の2本を使うと確実です（同じ辺の2本は内部でつながっていることがあります）",
-    "● ブザーはパッシブ型を D2 と GND に。音が大きすぎるときは 100Ω 前後を直列に入れます",
+    "● つまみ：A→D7、B→D8、C と 1→GND、4（押しボタン）→D6。LED は 3（赤）→抵抗→D9、2（青）→抵抗→D10（HIGH で点灯）",
+    "● 青 LED は 3.3V だと暗めです。100Ω から明るさを見て決めます（赤は 1kΩ から）。回す向きが逆なら A と B を入れ替えます",
+    "● 圧電サウンダ（パッシブ型）は D2 と GND に。音が大きすぎるときは 2.2k〜10kΩ を直列に入れます",
     "● OLED は後回しでも OK（つながっていなくてもキーヤーは動きます）。電源は必ず 3V3 から",
-    "● 5V・D7〜D10 は使いません",
+    "● 5V・D3 は使いません。エンコーダーを付けないときは D6 にタクトスイッチをつなぐと「決定」だけ使えます",
 ]
 for k, n in enumerate(notes):
-    d.text((60, 960 + k * 25), n, font=f_small, fill="black")
+    d.text((60, 990 + k * 25), n, font=f_small, fill="black")
 
 img.save("docs/wiring.png")
 print("saved docs/wiring.png")
