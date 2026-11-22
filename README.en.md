@@ -86,7 +86,7 @@ npm test
 
 ## Case
 
-A 3D-printable case (85 × 69 × 29.7 mm, holds the perfboard above) is in [case/](case/README.md): STL and STEP files, plus a script to regenerate it with different dimensions (the case README is in Japanese).
+A 3D-printable case (109 × 79 × 35.7 mm, holds the perfboard above with at least 10 mm clearance; fastened with M3 countersunk screws) is in [case/](case/README.md): STL and STEP files, plus a script to regenerate it with different dimensions (the case README is in Japanese).
 
 ![Case preview](case/out/preview_top.png)
 
