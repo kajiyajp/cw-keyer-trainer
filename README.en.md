@@ -47,6 +47,8 @@ Then open http://localhost:8000/ in Chrome / Edge (use `-Port 8001` for another 
 
 ![Wiring diagram](docs/wiring.png)
 
+Layout on a breadboard-pattern perfboard (Akizuki 104303, 80 × 50 mm): [component side](docs/board_front.png) / [solder side](docs/board_back.png) (labels in Japanese)
+
 | Pin | Use |
 |---|---|
 | D0 / D1 | Dit / dah (internal pull-up, closes to GND) |
@@ -84,7 +86,9 @@ npm test
 
 ## Case
 
-Coming soon (STEP / STL files for 3D printing).
+A 3D-printable case (85 × 69 × 29.7 mm, holds the perfboard above) is in [case/](case/README.md): STL and STEP files, plus a script to regenerate it with different dimensions (the case README is in Japanese).
+
+![Case preview](case/out/preview_top.png)
 
 ## Documents
 
