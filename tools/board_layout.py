@@ -38,15 +38,15 @@ NET = {
 }
 
 # ---- 部品のピン：(列, 行, 信号, 表示名) ----
-XIAO_COLS = range(2, 9)
+XIAO_COLS = range(1, 8)                                         # 基板の左端に寄せる（USB-C を壁に近づける）
 XIAO_FRONT = ["D0", "D1", "D2", "D3", "D4", "D5", "D6"]       # D 行（USB 側から）
 XIAO_BACK = ["5V", "GND", "3V3", "D10", "D9", "D8", "D7"]      # H 行
 ENC_COLS = range(23, 28)                                        # DIP 化基板（C 行と I 行）
 ENC_FRONT = [("NC", "−"), ("D7", "A"), ("GND", "C"), ("D8", "B"), ("NC", "−")]
 ENC_BACK = [("NC", "−"), ("D6", "4 SW"), ("LED_R", "3 赤"), ("LED_B", "2 青"), ("GND", "1 共通")]
-OLED_HDR = [(14, "GND"), (15, "3V3"), (16, "D5"), (17, "D4")]   # J 行の 4 ピンヘッダー
+OLED_HDR = [(14, "GND"), (15, "3V3"), (16, "D5"), (17, "D4")]   # J 行：OLED からの線を直接はんだ付け
 OLED_NAMES = {"GND": "GND", "3V3": "VCC", "D5": "SCL", "D4": "SDA"}
-SOUNDER = [(13, "B", "SND", "+"), (17, "B", "GND", "−")]
+# ブザー（耳付きのパネル取付型）はケースの手前の壁に付け、リード線を基板へ（OFFBOARD）
 
 pins = []
 for i, c in enumerate(XIAO_COLS):
@@ -57,31 +57,29 @@ for i, c in enumerate(ENC_COLS):
     pins.append((c, "I", ENC_BACK[i][0], ENC_BACK[i][1]))
 for c, net in OLED_HDR:
     pins.append((c, "J", net, OLED_NAMES[net]))
-for c, r, net, name in SOUNDER:
-    pins.append((c, r, net, name))
 
 # 抵抗：(列1, 行1, 列2, 行2, 信号, 表示)
 RESISTORS = [
-    (4, "C", 10, "C", "D2", "R1 音量（0Ω〜10kΩ。ジャンパー線でも可）"),
-    (5, "J", 11, "J", "D10", "R2 100Ω（青）"),
-    (6, "I", 12, "I", "D9", "R3 1kΩ（赤）"),
+    (3, "C", 13, "C", "D2", "R1 音量（いらなければジャンパー線）"),   # 図には空白より前（R1）だけ書く
+    (4, "J", 11, "J", "D10", "R2 100Ω（青）"),
+    (5, "I", 12, "I", "D9", "R3 1kΩ（赤）"),
 ]
 # ジャンパー線：(列1, 行1, 列2, 行2, 信号)
 WIRES = [
-    (3, "J", 3, "T-", "GND"), (4, "J", 4, "T+", "3V3"),
+    (2, "J", 2, "T-", "GND"), (3, "J", 3, "T+", "3V3"),
     (14, "I", 14, "T-", "GND"), (15, "I", 15, "T+", "3V3"),
-    (16, "I", 7, "B", "D5"), (17, "I", 6, "B", "D4"),
-    (24, "J", 8, "B", "D6"), (8, "J", 24, "A", "D7"), (7, "J", 26, "A", "D8"),
+    (16, "I", 6, "B", "D5"), (17, "I", 5, "B", "D4"),
+    (24, "J", 7, "B", "D6"), (7, "J", 24, "A", "D7"), (6, "J", 26, "A", "D8"),
     (12, "G", 25, "J", "LED_R"), (11, "H", 26, "J", "LED_B"),
     (27, "J", 27, "T-", "GND"), (25, "B", 25, "B-", "GND"),
-    (10, "D", 13, "E", "SND"),                        # サウンダの下を避けて E 行から
-    (17, "E", 19, "E", "GND"), (19, "A", 19, "B-", "GND"),
     (20, "T-", 20, "B-", "GND"),
 ]
 # 基板の外へ出る線：(列, 行, 信号, 表示, 引き出す向き)
 OFFBOARD = [
-    (2, "A", "D0", "ジャック 先端（短点）", "down"),
-    (3, "A", "D1", "ジャック リング（長点）", "down"),
+    (1, "A", "D0", "ジャック 先端（短点）", "down"),
+    (2, "A", "D1", "ジャック リング（長点）", "down"),
+    (13, "A", "SND", "ブザー 赤（＋）：手前の壁へ", "down"),
+    (17, "B-", "GND", "ブザー 黒（−）：手前の壁へ", "down"),
     (10, "T-", "GND", "ジャック 根元（GND）", "up"),
 ]
 
@@ -143,7 +141,7 @@ def front():
     over = Image.new("RGBA", img.size, (0, 0, 0, 0))
     o = ImageDraw.Draw(over)
     # XIAO：本体 21×17.5mm、USB-C は左
-    cx, cy = (hx(2) + hx(8)) / 2, (hy("D") + hy("H")) / 2
+    cx, cy = (hx(1) + hx(7)) / 2, (hy("D") + hy("H")) / 2
     w, h = 21 / PITCH * P, 17.5 / PITCH * P
     o.rounded_rectangle([cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2], radius=10, fill=(30, 90, 60, 170), outline=(0, 0, 0, 255), width=2)
     o.rectangle([cx - w / 2 - 12, cy - 4.5 / PITCH * P, cx - w / 2 + 25, cy + 4.5 / PITCH * P], fill=(180, 180, 180, 230), outline=(0, 0, 0, 255))
@@ -154,18 +152,13 @@ def front():
     bw = 12.4 / PITCH * P
     o.rectangle([ex - bw / 2, ey - bw / 2, ex + bw / 2, ey + bw / 2], fill=(90, 90, 90, 170), outline=(0, 0, 0, 255), width=2)
     o.ellipse([ex - 3 / PITCH * P, ey - 3 / PITCH * P, ex + 3 / PITCH * P, ey + 3 / PITCH * P], fill=(200, 200, 200, 230), outline=(0, 0, 0, 255))
-    # 圧電サウンダ φ17
-    sx, sy = (hx(13) + hx(17)) / 2, hy("B")
-    sr = 8.5 / PITCH * P
-    o.ellipse([sx - sr, sy - sr, sx + sr, sy + sr], fill=(250, 235, 200, 140), outline=(0, 0, 0, 255), width=2)
-    # OLED 用ヘッダー
+    # OLED の線をはんだ付けする 4 穴
     o.rectangle([hx(14) - 14, hy("J") - 14, hx(17) + 14, hy("J") + 14], fill=(20, 20, 20, 200))
     img.alpha_composite(over)
     d = ImageDraw.Draw(img)
     d.text((cx, cy), "XIAO RP2040", font=f_big, fill="white", anchor="mm")
     d.text((cx - w / 2 + 6, cy), "USB-C", font=f_small, fill="black", anchor="lm")
     d.text((ex, ey - bw / 2 - 2), "つまみ", font=f_small, fill="white", anchor="md")
-    d.text((sx, sy + sr - 10), "圧電サウンダ", font=f_small, fill="black", anchor="md")
     # 取付穴（部品の下に隠れるので輪郭を描き直す）
     my = (hy("E") + hy("F")) / 2
     for c in MOUNT_COLS:
@@ -212,25 +205,25 @@ def front():
 def legend(d, x, y):
     lines = [
         ("部品（穴の位置）", None),
-        ("XIAO：D 行 2〜8 列（D0〜D6）、H 行 2〜8 列（5V〜D7）", None),
+        ("XIAO：D 行 1〜7 列（D0〜D6）、H 行 1〜7 列（5V〜D7）", None),
         ("つまみ：C 行 23〜27（−,A,C,B,−）、I 行 23〜27（−,SW,赤,青,共通）", None),
-        ("サウンダ：B13（＋）・B17（−）。足の間隔が違うときは列を変える", None),
-        ("OLED ヘッダー：J14〜17（GND,VCC,SCL,SDA）", None),
+        ("OLED の線：J14〜17（GND,VCC,SCL,SDA）に直接はんだ付け", None),
         ("", None),
         ("ジャンパー線", None),
-        ("GND：J3・I14・J27→上の−、B25・A19→下の−", "GND"),
-        ("上下の−を 20 列でつなぐ。サウンダ−：E17→E19", "GND"),
-        ("3V3：J4・I15→上の＋", "3V3"),
-        ("D2：R1（C4〜C10）、D10→E13→サウンダ＋", "D2"),
-        ("D4 SDA：B6→I17　D5 SCL：B7→I16", "D4"),
-        ("D6 押しボタン：B8→J24", "D6"),
-        ("D7 A：J8→A24　D8 B：J7→A26", "D7"),
-        ("D9 赤：R3（I6〜I12）、G12→J25", "D9"),
-        ("D10 青：R2（J5〜J11）、H11→J26", "D10"),
+        ("GND：J2・I14・J27→上の−、B25→下の−", "GND"),
+        ("上下の−を 20 列でつなぐ", "GND"),
+        ("3V3：J3・I15→上の＋", "3V3"),
+        ("D2：R1 音量（C3〜C13。いらなければジャンパー線）→ブザー＋（A13）", "D2"),
+        ("D4 SDA：B5→I17　D5 SCL：B6→I16", "D4"),
+        ("D6 押しボタン：B7→J24", "D6"),
+        ("D7 A：J7→A24　D8 B：J6→A26", "D7"),
+        ("D9 赤：R3（I5〜I12）、G12→J25", "D9"),
+        ("D10 青：R2（J4〜J11）、H11→J26", "D10"),
         ("", None),
         ("基板の外", None),
-        ("ジャック：先端→A2、リング→A3、根元→上の−（T10）", "D0"),
-        ("OLED：J14〜17 からケーブルでふたの裏の OLED へ", None),
+        ("ジャック：先端→A1、リング→A2、根元→上の−（T10）", "D0"),
+        ("ブザー（手前の壁）：赤→A13、黒→下の−（17 列）", "D2"),
+        ("OLED：J14〜17 から線でふたの裏の OLED へ", None),
         ("", None),
         ("● 取付穴（中央の溝の両端）：1 列目は XIAO の下", None),
         ("   になるので位置決めピン、30 列目をねじで留める", None),
@@ -240,7 +233,7 @@ def legend(d, x, y):
     for k, (t, net) in enumerate(lines):
         if net:
             d.line([(x, y + k * 27 + 9), (x + 22, y + k * 27 + 9)], fill=NET[net], width=5)
-        bold = t and not t.startswith(("XIAO", "つまみ", "サウンダ", "OLED", "GND", "3V3", "D", "ジャック", "●", "   ", "上下"))
+        bold = t and not t.startswith(("XIAO", "つまみ", "ブザー", "OLED", "GND", "3V3", "D", "ジャック", "●", "   ", "上下"))
         d.text((x + (30 if net else 0), y + k * 27), t, font=f_mid if bold else f_small, fill="black")
 
 
@@ -273,14 +266,14 @@ def back():
             d.text(((xa + xb) / 2, hy(r1) - 20), label, font=f_small, fill="black", anchor="mb")
         else:
             d.text(((xa + xb) / 2, hy(r2) + 20), label, font=f_small, fill="black", anchor="mt")
-    box(2, 8, "H", "D", "XIAO")
+    box(1, 7, "H", "D", "XIAO")
     box(23, 27, "I", "C", "つまみ")
     box(14, 17, "J", "J", "OLED ヘッダー", above=True)
     # 信号名の凡例
     x, y = X0 + BW + 30, Y0
     d.text((x, y), "点の色", font=f_mid, fill="black")
     for k, (net, t) in enumerate([("GND", "GND"), ("3V3", "3V3"), ("D0", "D0 短点"), ("D1", "D1 長点"),
-                                   ("D2", "D2・サウンダ"), ("D4", "D4 SDA"), ("D5", "D5 SCL"), ("D6", "D6 押しボタン"),
+                                   ("D2", "D2・ブザー"), ("D4", "D4 SDA"), ("D5", "D5 SCL"), ("D6", "D6 押しボタン"),
                                    ("D7", "D7 A 相"), ("D8", "D8 B 相"), ("D9", "D9・赤 LED"), ("D10", "D10・青 LED")]):
         dot(d, x + 10, y + 40 + k * 30, NET[net], 8)
         d.text((x + 28, y + 40 + k * 30), t, font=f_mid, fill="black", anchor="lm")
