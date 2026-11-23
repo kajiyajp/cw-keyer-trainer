@@ -1,0 +1,4 @@
+(sym_lib_table
+  (version 7)
+  (lib (name "cw-keyer")(type "KiCad")(uri "${KIPRJMOD}/cw-keyer.kicad_sym")(options "")(descr "CW Keyer Trainer の自作部品"))
+)
