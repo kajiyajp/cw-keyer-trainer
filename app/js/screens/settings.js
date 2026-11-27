@@ -12,7 +12,7 @@ const APP_FIELDS = [
 ];
 // 機器の設定項目 [キー, 名前, 最小, 最大]（MODE は A/B/U。U は Ultimatic）
 const DEV_FIELDS = [
-  ['WPM', '速さ (WPM)', 5, 40], ['MODE', 'モード (A/B/U)'], ['TONE', '音の高さ (Hz)', 400, 1200],
+  ['WPM', '速さ (WPM)', 5, 40], ['MODE', 'モード (A/B/U)'], ['TONE', '音の高さ (Hz)', 400, 5000],
   ['SIDETONE', 'サイドトーン (0/1)', 0, 1], ['KOCH', 'Koch レベル', 2, 41],
   ['ECHOLEN', 'エコー文字数', 1, 5], ['HINT', 'ヒント (0/1)', 0, 1],
 ];

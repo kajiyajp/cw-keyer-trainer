@@ -21,7 +21,7 @@ enum class EchoState : uint8_t { Playing, Answer, Result };
 constexpr uint16_t LONG_PRESS_MS = 800;
 constexpr uint16_t REDRAW_MS = 100;       // 描画の最短間隔（描画中は core0 が約 25ms 止まる）
 constexpr uint16_t RESULT_WAIT_MS = 1200;
-constexpr uint16_t OK_BEEP_HZ = 1600;  // トーン上限（1200Hz）より高くして打鍵音と区別する
+constexpr uint16_t OK_BEEP_HZ = 1600;  // 打鍵音（初期値 3000Hz）と違う高さにして区別する
 constexpr uint16_t OK_BEEP_MS = 50;
 constexpr uint16_t LED_FLASH_MS = 300;  // 正解・不正解の LED を点ける長さ
 
@@ -319,7 +319,8 @@ void uiUpdate(uint32_t now) {
   if (screen == Screen::Echo) updateEcho(now);
   updateLeds(now);
   // 打鍵中（最後のイベントから語間＝短点7個分以内）は描画しない。描画中は HID が約 25ms 止まるため
-  bool quiet = now - lastActivity >= 7u * (1200u / cfg->wpm);
+  // ただし設定画面は、打鍵しながらつまみで TONE などを変えて確かめるので、打鍵中も描く
+  bool quiet = screen == Screen::Settings || now - lastActivity >= 7u * (1200u / cfg->wpm);
   if (oledOk && dirty && quiet && now - lastDraw >= REDRAW_MS) {
     dirty = false;
     lastDraw = now;
