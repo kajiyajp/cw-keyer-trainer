@@ -1,5 +1,6 @@
 # 作成：2026-11-21
-# 目的：XIAO RP2040 とパドル・圧電サウンダ・OLED・つまみ（LED 付きロータリーエンコーダー）の配線図（docs/wiring.png）を生成する
+# 目的：XIAO RP2040 とパドル・ブザー・OLED・つまみ（LED 付きロータリーエンコーダー）の配線図（docs/wiring.png）を生成する
+#       ブザーはトランジスタの回路（D2 と 5V から）なので、この図では行き先だけ書き、中身は回路図（docs/schematic.svg）に任せる
 from PIL import Image, ImageDraw, ImageFont
 
 W, H = 1500, 1160
@@ -94,7 +95,7 @@ d.text((GX - 10, pin_y(0) - 40), "GND", font=f_big, fill=GND_C, anchor="mm")
 
 # ---- 左側の部品 ----
 X_PART1, X_PART2 = 250, 430
-parts = {0: ("sw", "短点レバー（DIT）"), 1: ("sw", "長点レバー（DAH）"), 2: ("bz", "圧電サウンダ（パッシブ）")}
+parts = {0: ("sw", "短点レバー（DIT）"), 1: ("sw", "長点レバー（DAH）")}
 for i, (kind, label) in parts.items():
     y = pin_y(i)
     color = COL[left[i][:2]]
@@ -106,6 +107,18 @@ for i, (kind, label) in parts.items():
         buzzer(X_PART1, X_PART2, y, color, label)
         wire([(GX, y), (X_PART1, y)], GND_C)
     dot(GX, y)
+
+# D2 はブザーの回路へ（ネットラベル）
+y2 = pin_y(2)
+wire([(BX1 - 12, y2), (460, y2)], COL["D2"])
+d.polygon([(460, y2 - 16), (200, y2 - 16), (180, y2), (200, y2 + 16), (460, y2 + 16)], fill=COL["D2"])
+d.text((320, y2), "ブザー回路 R1（1kΩ）へ", font=f_mid, fill="white", anchor="mm")
+
+# 5V もブザーの回路へ（ネットラベル）
+y5 = pin_y(0)
+wire([(BX2 + 12, y5), (860, y5)], COL["D2"])
+d.polygon([(860, y5 - 16), (975, y5 - 16), (990, y5), (975, y5 + 16), (860, y5 + 16)], fill=COL["D2"])
+d.text((922, y5), "ブザー R4へ", font=f_small, fill="white", anchor="mm")
 
 # D4 / D5 は OLED へ（ネットラベル）
 for i, net in ((4, "SDA"), (5, "SCL")):
@@ -184,9 +197,9 @@ notes = [
     "● スイッチは「ピン ↔ GND」をつなぐだけ。プルアップは XIAO 内部で有効にするので抵抗は不要です",
     "● つまみ：A→D7、B→D8、C と 1→GND、4（押しボタン）→D6。LED は 3（赤）→抵抗→D9、2（青）→抵抗→D10（HIGH で点灯）",
     "● 青 LED は 3.3V だと暗めです。100Ω から明るさを見て決めます（赤は 1kΩ から）。回す向きが逆なら A と B を入れ替えます",
-    "● 圧電サウンダ（パッシブ型）は D2 と GND に。音が大きすぎるときは 2.2k〜10kΩ を直列に入れます",
+    "● ブザー（電磁式 16Ω）はトランジスタで 5V から鳴らします（XIAO のピンでは電流が足りない）。中身は回路図 docs/schematic.svg",
     "● OLED は後回しでも OK（つながっていなくてもキーヤーは動きます）。電源は必ず 3V3 から",
-    "● 5V・D3 は使いません。エンコーダーを付けないときは D6 にタクトスイッチをつなぐと「決定」だけ使えます",
+    "● D3 は使いません。エンコーダーを付けないときは D6 にタクトスイッチをつなぐと「決定」だけ使えます",
 ]
 for k, n in enumerate(notes):
     d.text((60, 990 + k * 25), n, font=f_small, fill="black")
