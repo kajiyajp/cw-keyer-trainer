@@ -1,7 +1,7 @@
 # 作成：2026-11-23
 # 目的：エレキー本体の回路図（KiCad 10 で開けるプロジェクト）を hardware/ に生成する
 #       接続は firmware/src/pins.h と実体配線図（tools/board_layout.py）に合わせる。
-#       信号は線（ワイヤー）で、電源は GND / +3V3 の記号でつなぐ。
+#       信号は線（ワイヤー）で、電源は GND / +3V3 / +5V の記号でつなぐ。
 # 実行：python tools/make_schematic.py [KiCad の symbols フォルダ]
 #       既定は %LOCALAPPDATA%/Programs/KiCad/10.0/share/kicad/symbols。
 #       書き出したあと kicad-cli sch upgrade で KiCad 10 の形式にそろえる（tools/check_schematic.ps1）
@@ -94,7 +94,8 @@ def custom_symbol(name, ref, value, desc, box, pins, extra=""):
 
 
 # XIAO RP2040：ピン番号は実物のまま。並びは配線が交差しないよう実物と変えている
-# （左：上から D2・D0・D1・D3・D4・D5・D6、右：上から 3V3・5V・D10・D9・D8・D7・GND。実物の並びは docs/hardware.md のピン表）
+# （左：上から D2・D0・D1・D3・D4・D5・D6、右：上から 3V3・（空き）・D10・D9・D8・D7・GND、5V は上。
+#   実物の並びは docs/hardware.md のピン表）
 XIAO_LEFT = [("3", "D2"), ("1", "D0"), ("2", "D1"), ("4", "D3"), ("5", "D4/SDA"), ("6", "D5/SCL"), ("7", "D6")]
 XIAO_RIGHT = [("12", "3V3", "power_out"), ("14", "5V", "power_out"),
               ("11", "D10", "bidirectional"), ("10", "D9", "bidirectional"), ("9", "D8", "bidirectional"),
@@ -104,7 +105,8 @@ XIAO_RIGHT = [("12", "3V3", "power_out"), ("14", "5V", "power_out"),
 # 自作部品の定義を {名前: 定義} で返す
 def custom_symbols():
     xiao = [(n, nm, "bidirectional", -12.7, 7.62 - 2.54 * i, 0) for i, (n, nm) in enumerate(XIAO_LEFT)]
-    xiao += [(n, nm, t, 12.7, 7.62 - 2.54 * i, 180) for i, (n, nm, t) in enumerate(XIAO_RIGHT)]
+    xiao += [(n, nm, t, 12.7, 7.62 - 2.54 * i, 180) for i, (n, nm, t) in enumerate(XIAO_RIGHT) if n != "14"]
+    xiao.append(("14", "5V", "power_out", 0, 12.7, 270))  # 5V は上に出して +5V の記号を真上に置く
     # つまみ：信号は左に上から 2 青・3 赤・B・A・4 押しボタン、GND の C と 1 共通は下（2色 LED は共通カソード）
     enc = [("2", "LED_B", "passive", -10.16, 5.08, 0), ("3", "LED_R", "passive", -10.16, 2.54, 0),
            ("B", "B", "passive", -10.16, 0, 0), ("A", "A", "passive", -10.16, -2.54, 0),
@@ -124,21 +126,32 @@ def custom_symbols():
 
 
 # ---- 回路図に置く部品と、ピンごとのつなぎ先 ----
-# つなぎ先："ネット名"（ROUTES の線でつなぐ）、"GND" / "+3V3"（電源記号）、None（未接続の印）
-# 向き：rot＝回転（90＝横向き）、mirror_x＝上下反転、mirror_y＝左右反転
+# つなぎ先："ネット名"（ROUTES の線でつなぐ）、"GND" / "+3V3" / "+5V"（電源記号）、None（未接続の印）
+# 向き：rot＝回転（90 / 270）、mirror_x＝上下反転、mirror_y＝左右反転
 PARTS = [
     # (参照名, lib_id, 値, 置く位置 (x, y), 向き, {ピン番号: つなぎ先}, 追加の欄)
     ("U1", f"{LIB}:XIAO_RP2040", "XIAO RP2040", (127, 101.6), {},
      {"1": "DIT", "2": "DAH", "3": "D2", "4": None, "5": "SDA", "6": "SCL", "7": "KNOB_SW",
-      "8": "KNOB_A", "9": "KNOB_B", "10": "D9", "11": "D10", "12": "+3V3", "13": "GND", "14": None},
+      "8": "KNOB_A", "9": "KNOB_B", "10": "D9", "11": "D10", "12": "+3V3", "13": "GND", "14": "+5V"},
      {"Note": "Seeed Studio XIAO RP2040"}),
     ("J1", "Connector_Audio:AudioJack3", "3.5mm ステレオジャック", (76.2, 99.06), {"mirror_x": True},
      {"T": "DIT", "R": "DAH", "S": "GND"},
      {"Note": "パネル取付。先端＝短点、リング＝長点、根元＝GND"}),
-    ("R1", "Device:R", "2.2k〜10k", (101.6, 81.28), {"rot": 90}, {"1": "SND", "2": "D2"},
-     {"Note": "音量調整。音が大きすぎなければジャンパー線でよい"}),
-    ("BZ1", "Device:Buzzer", "圧電サウンダ", (92.71, 83.82), {"mirror_y": True}, {"1": "SND", "2": "GND"},
-     {"Note": "ASIN B0CZJ5DGDH（耳付き）。PWM で音の高さが変わることを実機で確認済み"}),
+    # ブザーの回路：電磁ブザー（16Ω）は XIAO のピンでは電流が足りない（約 200mA 流れようとする）ので、
+    # トランジスタ Q1 で 5V から鳴らす。音量は RV1、0Ω に回しても R4 で電流を抑える。D1 はコイルの逆起電力を逃がす
+    ("R1", "Device:R", "1k", (101.6, 81.28), {"rot": 90}, {"1": "Q_B", "2": "D2"},
+     {"Note": "トランジスタのベース抵抗"}),
+    ("Q1", "Transistor_BJT:Q_NPN_ECB", "2SC1815", (90.17, 81.28), {"mirror_y": True},
+     {"1": "GND", "2": "Q_C", "3": "Q_B"},
+     {"Note": "NPN トランジスタ（2SC1815 GR など。足は平らな面から見て左から E・C・B）"}),
+    ("RV1", "Device:R_Potentiometer", "1kΩ B", (87.63, 68.58), {"mirror_x": True}, {"3": "BZ_N", "2": "Q_C", "1": "Q_C"},
+     {"Note": "秋月 118291 小型ボリューム（パネル取付）。音量調整（右に回すと大きく）。1 と 2 をつなぐ"}),
+    ("BZ1", "Device:Buzzer", "電磁ブザー 16Ω", (90.17, 58.42), {}, {"1": "BZ_P", "2": "BZ_N"},
+     {"Note": "ASIN B08LB2GYD1（KKHMF、パッシブ型、共振 2kHz）"}),
+    ("D1", "Device:D", "1S1588", (82.55, 58.42), {"rot": 270}, {"1": "BZ_P", "2": "BZ_N"},
+     {"Note": "逆起電力を逃がすダイオード。帯（カソード）を 5V 側に"}),
+    ("R4", "Device:R", "100", (87.63, 46.99), {}, {"1": "+5V", "2": "BZ_P"},
+     {"Note": "RV1 を 0Ω に回したときの電流制限（最大約 40mA。ボリュームの発熱を抑える）"}),
     ("R2", "Device:R", "100", (154.94, 88.9), {}, {"1": "LED_B", "2": "D10"}, {"Note": "つまみの青 LED の電流制限"}),
     ("R3", "Device:R", "1k", (162.56, 88.9), {}, {"1": "LED_R", "2": "D9"}, {"Note": "つまみの赤 LED の電流制限"}),
     ("SW1", f"{LIB}:EC12_LED2", "EC12 24クリック 2色LED", (182.88, 104.14), {},
@@ -155,7 +168,13 @@ ROUTES = [
     ("DIT", ["U1:1", "J1:T"]),
     ("DAH", ["U1:2", "J1:R"]),
     ("D2", ["U1:3", (109.22, 93.98), (109.22, 81.28), "R1:2"]),
-    ("SND", ["R1:1", "BZ1:1"]),
+    ("Q_B", ["R1:1", "Q1:3"]),
+    ("Q_C", ["RV1:1", "Q1:2"]),
+    ("Q_C", ["RV1:2", (91.44, 72.39), "RV1:1"]),  # ボリュームの真ん中の足を 1 とつなぎ、可変抵抗として使う
+    ("BZ_N", ["BZ1:2", "RV1:3"]),
+    ("BZ_N", ["D1:2", (82.55, 64.77), "RV1:3"]),
+    ("BZ_P", ["R4:2", "BZ1:1"]),
+    ("BZ_P", ["D1:1", (82.55, 50.8), "R4:2"]),
     ("SDA", ["U1:5", (106.68, 104.14), (106.68, 120.65), "DS1:4"]),
     ("SCL", ["U1:6", (109.22, 106.68), (109.22, 123.19), "DS1:3"]),
     ("KNOB_SW", ["U1:7", (111.76, 109.22), (111.76, 133.35), (165.1, 133.35), (165.1, 109.22), "SW1:4"]),
@@ -168,11 +187,14 @@ ROUTES = [
 ]
 
 WIRE = 5.08  # 電源記号へ出す線の長さ
+POWER = ("GND", "+3V3", "+5V")  # 電源記号でつなぐネット
 
 # 参照名・値の文字の位置（部品の置き場所からのずれ。回路図の座標）。ここに無い部品は右横に置く
 TEXT_AT = {  # 電源記号は名前を記号の先（GND は下、+3V3 は上）に書く
-    "GND": ((0, 3.81), (0, 3.81)), "+3V3": ((0, -3.81), (0, -3.81)),
-    "U1": ((0, -12.7), (0, 12.7)), "J1": ((0, -6.35), (-2.54, 6.35)), "BZ1": ((-2.54, -5.08), (-2.54, 6.35)),
+    "GND": ((0, 3.81), (0, 3.81)), "+3V3": ((0, -3.81), (0, -3.81)), "+5V": ((0, -3.81), (0, -3.81)),
+    "U1": ((-6.35, -12.7), (0, 12.7)), "J1": ((0, -6.35), (-2.54, 6.35)),
+    "Q1": ((-8.89, -1.27), (-10.16, 1.27)), "D1": ((-5.08, -1.27), (-5.08, 1.27)),
+    "BZ1": ((7.62, -1.27), (12.7, 1.27)), "RV1": ((7.62, -1.27), (7.62, 1.27)),
     "R1": ((0, -2.54), (0, 2.54)), "R2": ((-3.81, -1.27), (-3.81, 1.27)), "R3": ((-3.81, -1.27), (-3.81, 1.27)),
     "SW1": ((0, -10.16), (0, 21.59)), "DS1": ((0, -8.89), (0, 8.89)),
 }
@@ -182,6 +204,8 @@ TEXT_AT = {  # 電源記号は名前を記号の先（GND は下、+3V3 は上�
 def orient(o, x, y):
     if o.get("rot") == 90:  # 左回りに 90°
         x, y = -y, x
+    elif o.get("rot") == 270:  # 右回りに 90°
+        x, y = y, -x
     if o.get("mirror_y"):
         x = -x
     if o.get("mirror_x"):
@@ -228,7 +252,8 @@ def check_geometry(segs, pin_xy, pin_net):
 def build(symdir):
     lib_defs = {}
     for lib, name in [("Device", "R"), ("Device", "Buzzer"), ("Connector_Audio", "AudioJack3"),
-                      ("power", "GND"), ("power", "+3V3")]:
+                      ("Transistor_BJT", "Q_NPN_ECB"), ("Device", "D"), ("Device", "R_Potentiometer"),
+                      ("power", "GND"), ("power", "+3V3"), ("power", "+5V")]:
         lib_defs[f"{lib}:{name}"] = std_symbol(symdir, lib, name)
     custom = custom_symbols()
     for name, body in custom.items():
@@ -281,8 +306,8 @@ def build(symdir):
             pin_xy[f"{ref}:{num}"], pin_net[f"{ref}:{num}"] = (x, y), net
             if net is None:
                 items.append(f'(no_connect (at {x} {y}) (uuid {q(uid(ref + "nc" + num))}))')
-            elif net in ("GND", "+3V3"):
-                # 電源記号：GND は下、+3V3 は上へ。横に出た線は L 字に曲げてから置く
+            elif net in POWER:
+                # 電源記号：GND は下、+3V3・+5V は上へ。横に出た線は L 字に曲げてから置く
                 dx, dy = outward(o, a)
                 x2, y2 = round(x + dx * WIRE, 4), round(y + dy * WIRE, 4)
                 wire((x, y), (x2, y2), ref + "p" + num, net)
@@ -309,16 +334,16 @@ def build(symdir):
             if x1 != x2 and y1 != y2:
                 raise SystemExit(f"{net} の {k} 本目の線が斜め：{pts[k]} → {pts[k + 1]}")
             wire(pts[k], pts[k + 1], f"{net}{k}", net)
-    missing = [p for p, n in pin_net.items() if n not in (None, "GND", "+3V3") and p not in routed]
+    missing = [p for p, n in pin_net.items() if n is not None and n not in POWER and p not in routed]
     if missing:
         raise SystemExit(f"線が引かれていないピン：{missing}")
     check_geometry(segs, pin_xy, pin_net)
 
     notes = [
-        ("CW Keyer Trainer 本体（XIAO RP2040）", 25.4, 25.4),
-        ("・電源は GND / +3V3 の記号でつながっている（同じ記号どうしが接続）", 25.4, 30.48),
-        ("・D0/D1/D6/D7/D8 は内部プルアップ（外付け抵抗なし）。つまみのチャタリングはソフトで処理", 25.4, 35.56),
-        ("・D3 と 5V は未使用", 25.4, 40.64),
+        ("CW Keyer Trainer 本体（XIAO RP2040）", 25.4, 147.32),
+        ("・電源は GND / +3V3 / +5V の記号でつながっている（同じ記号どうしが接続）", 25.4, 152.4),
+        ("・D0/D1/D6/D7/D8 は内部プルアップ（外付け抵抗なし）。つまみのチャタリングはソフトで処理", 25.4, 157.48),
+        ("・ブザーは Q1 で 5V から鳴らす（D2 が HIGH で鳴る）。音量は RV1。D3 は未使用", 25.4, 162.56),
     ]
     for i, (t, x, y) in enumerate(notes):
         items.append(f'(text {q(t)} (exclude_from_sim no) (at {x} {y} 0){eff(justify="left bottom")}'

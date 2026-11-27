@@ -38,7 +38,7 @@ Then open http://localhost:8000/ in Chrome / Edge (use `-Port 8001` for another 
 |---|---|
 | MCU | Seeed XIAO RP2040 |
 | Display | 0.96" OLED SSD1306 (I2C, 4 pins) |
-| Buzzer | Passive piezo buzzer (no built-in oscillator). Add 2.2k–10kΩ in series if it is too loud |
+| Buzzer | Passive electromagnetic buzzer (16Ω, resonant at 2kHz), driven from 5V through a 2SC1815 transistor, with a panel-mount 1kΩ (B taper) pot for volume ([circuit](docs/hardware.md#ブザーの回路), Japanese) |
 | Knob | Rotary encoder with push switch and red/blue LEDs (Akizuki P-05772, EC12, 24 detents) + DIP adapter (P-07240). LED resistors: start at 1kΩ for red, 100Ω for blue |
 | Paddle jack | 3.5mm stereo jack (tip = dit, ring = dah, sleeve = GND) |
 | Paddle | Any commercial paddle with a 3.5mm stereo plug |
@@ -54,7 +54,7 @@ Layout on a breadboard-pattern perfboard (Akizuki 104303, 80 × 50 mm): [compone
 | Pin | Use |
 |---|---|
 | D0 / D1 | Dit / dah (internal pull-up, closes to GND) |
-| D2 | Buzzer (PWM) |
+| D2 | Buzzer (PWM, through a transistor) |
 | D3 | Unused |
 | D4 / D5 | OLED SDA / SCL |
 | D6 | Knob push switch (terminal 4; internal pull-up, closes to GND) |
