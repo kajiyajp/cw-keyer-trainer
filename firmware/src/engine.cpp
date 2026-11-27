@@ -24,7 +24,7 @@ volatile bool ready = false;
 // core0 → core1 の設定（1語ずつなので volatile で十分）
 volatile uint8_t cfgWpm = 20;
 volatile uint8_t cfgMode = (uint8_t)KeyerMode::B;
-volatile uint16_t cfgTone = 700;
+volatile uint16_t cfgTone = 3000;
 volatile bool cfgSidetone = true;
 volatile uint32_t cfgSeq = 0;
 // 再生要求の数（core0 が増やす）と、終わった数（core1 が増やす）。差があれば再生中

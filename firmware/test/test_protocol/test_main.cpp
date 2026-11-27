@@ -12,11 +12,11 @@ void test_set_wpm() {
   TEST_ASSERT_EQUAL(25, c.wpm);
 }
 
-// トーンは上限 1200Hz まで設定できる（圧電ブザーは高めの音のほうがよく鳴る）
+// トーンは上限 5000Hz まで設定できる（圧電ブザーは高めの音のほうがよく鳴り、年を取っても聞こえる高さ）
 void test_set_tone_max() {
   Config c;
-  TEST_ASSERT(handleLine("SET TONE 1200", c) == CmdResult::Ok);
-  TEST_ASSERT_EQUAL(1200, c.toneHz);
+  TEST_ASSERT(handleLine("SET TONE 5000", c) == CmdResult::Ok);
+  TEST_ASSERT_EQUAL(5000, c.toneHz);
 }
 
 // 出題の文字数とヒント
@@ -39,10 +39,10 @@ void test_out_of_range() {
   Config c;
   TEST_ASSERT(handleLine("SET WPM 999", c) == CmdResult::Err);
   TEST_ASSERT(handleLine("SET WPM 4", c) == CmdResult::Err);
-  TEST_ASSERT(handleLine("SET TONE 1250", c) == CmdResult::Err);
+  TEST_ASSERT(handleLine("SET TONE 5100", c) == CmdResult::Err);
   TEST_ASSERT(handleLine("SET KOCH 42", c) == CmdResult::Err);
   TEST_ASSERT_EQUAL(20, c.wpm);
-  TEST_ASSERT_EQUAL(700, c.toneHz);
+  TEST_ASSERT_EQUAL(3000, c.toneHz);
 }
 
 // 数字以外が混ざったら ERR
@@ -87,10 +87,10 @@ void test_get_and_save() {
 void test_format_config() {
   Config c; char b[96];
   formatConfig(c, b, sizeof b);
-  TEST_ASSERT_EQUAL_STRING("CONFIG WPM=20 MODE=B TONE=700 SIDETONE=1 KOCH=2 ECHOLEN=1 HINT=1", b);
+  TEST_ASSERT_EQUAL_STRING("CONFIG WPM=20 MODE=B TONE=3000 SIDETONE=1 KOCH=2 ECHOLEN=1 HINT=1", b);
   c.mode = KeyerMode::Ultimatic;
   formatConfig(c, b, sizeof b);
-  TEST_ASSERT_EQUAL_STRING("CONFIG WPM=20 MODE=U TONE=700 SIDETONE=1 KOCH=2 ECHOLEN=1 HINT=1", b);
+  TEST_ASSERT_EQUAL_STRING("CONFIG WPM=20 MODE=U TONE=3000 SIDETONE=1 KOCH=2 ECHOLEN=1 HINT=1", b);
 }
 
 void test_format_element_and_char() {

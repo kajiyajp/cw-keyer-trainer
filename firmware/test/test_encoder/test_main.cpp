@@ -75,7 +75,7 @@ void test_setting_step_wraps() {
   configStep(c, ConfigItem::Tone, -1);
   TEST_ASSERT_EQUAL(TONE_MAX, c.toneHz);
   configStep(c, ConfigItem::Tone, -1);
-  TEST_ASSERT_EQUAL(TONE_MAX - 50, c.toneHz);
+  TEST_ASSERT_EQUAL(TONE_MAX - TONE_STEP, c.toneHz);
 }
 
 // MODE は A → B → U → A、逆回しで A → U
